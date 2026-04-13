@@ -3,14 +3,31 @@ import socketserver
 import os
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Dict, List
 from urllib.parse import urlparse, parse_qs
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime
 
 print("AviationSort server starting...")
 
 # Configuration
 PORT = 5001
 DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
+RSS_URLS = [
+    'https://www.aeroroutes.com/?format=rss',
+    'https://www.aero-news.net/news/rssCOMANW.xml',
+    'https://samchui.com/feed/',
+    'https://simpleflying.com/feed/',
+    'https://theaviationist.com/feed/',
+    'https://www.airlinereporter.com/feed/',
+    'https://avgeekery.com/feed/',
+    'https://australianaviation.com.au/feed/',
+    'https://feeds.feedburner.com/Ex-yuAviationNews',
+    'https://www.aviationbusinessnews.com/feed/',
+    'https://generalaviationnews.com/feed/',
+    'https://www.airbus.com/en/rss-all-feeds/15571?tid=15571&fid=29711'
+]
 
 # Initialize database
 print("Initializing database...")
@@ -40,6 +57,38 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS favorites (
 
 conn.commit()
 print("Database ready")
+
+def fetch_rss(url: str) -> List[Dict[str, str]]:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as f:
+            content = f.read().decode('utf-8')
+        root = ET.fromstring(content)
+        articles: List[Dict[str, str]] = []
+        for item in root.findall('.//item'):
+            title_elem = item.find('title')
+            title = title_elem.text if title_elem is not None and title_elem.text is not None else ''
+            description_elem = item.find('description')
+            description = description_elem.text if description_elem is not None and description_elem.text is not None else ''
+            link_elem = item.find('link')
+            link = link_elem.text if link_elem is not None and link_elem.text is not None else ''
+            pubdate_elem = item.find('pubDate')
+            pubdate_str = pubdate_elem.text if pubdate_elem is not None and pubdate_elem.text is not None else ''
+            try:
+                date = datetime.strptime(pubdate_str, '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d') if pubdate_str else datetime.now().strftime('%Y-%m-%d')
+            except ValueError:
+                date = datetime.now().strftime('%Y-%m-%d')
+            source = url.split('/')[2]
+            articles.append({
+                'id': str(len(articles) + 1),
+                'title': title,
+                'summary': description,
+                'date': date,
+                'url': link,
+                'source': source
+            })
+        return articles
+    except Exception:
+        return []
 
 class APIHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -76,44 +125,28 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
-    def handle_api(self, path: str, query: dict, method: str):
+    def handle_api(self, path: str, query: Dict[str, List[str]], method: str) -> None:
         self.send_cors_headers()
         self.end_headers()
 
+        response: Any
+
         # Mock API responses
         if path == '/api/photos':
-            response = [{
-                'id': '1',
-                'url': '/placeholder.jpg',
-                'registration': 'G-EZOA',
-                'airline': 'EasyJet',
-                'aircraftType': 'A320',
-                'date': '2024-01-15',
-                'isFavorite': False,
-                'hashtags': ['lhr', 'a320']
-            }]
+            response = []
 
         elif path == '/api/news':
+            articles: List[Dict[str, str]] = []
+            for url in RSS_URLS:
+                articles.extend(fetch_rss(url))
+            sources: List[str] = list(set(a['source'] for a in articles))
             response = {
-                'articles': [{
-                    'id': '1',
-                    'title': 'Aviation News Update',
-                    'summary': 'Latest developments in aviation industry.',
-                    'date': '2024-01-15',
-                    'url': 'https://example.com',
-                    'source': 'Aviation News'
-                }],
-                'sources': ['Aviation News']
+                'articles': articles[:20],  # Limit to 20
+                'sources': sources
             }
 
         elif path == '/api/stories':
-            response = [{
-                'id': '1',
-                'username': 'pilot123',
-                'avatar': 'https://picsum.photos/100',
-                'imageUrl': 'https://picsum.photos/300',
-                'isUnread': True
-            }]
+            response = []
 
         elif path == '/api/friends':
             response = [{
@@ -145,7 +178,7 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             response = {'message': 'Success'}
 
         else:
-            response = {'error': 'Unknown endpoint'}
+            response: Any = {'error': 'Unknown endpoint'}
 
         self.wfile.write(json.dumps(response).encode())
 

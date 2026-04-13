@@ -5060,7 +5060,6 @@ export default function App() {
   const [calcDisplay, setCalcDisplay] = useState('0');
   const [calcHistory, setCalcHistory] = useState<string[]>([]);
   const [calcMode, setCalcMode] = useState<'standard' | 'scientific' | 'analytical'>('standard');
-  const [resourceData, setResourceData] = useState<{ time: string; cpu: number; ram: number }[]>([]);
   
   // SkyChat State
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -5170,13 +5169,7 @@ export default function App() {
     const newSocket = io();
     setSocket(newSocket);
 
-    newSocket.on('telemetry', (data) => {
-      setResourceData(prev => [...prev.slice(-19), {
-        time: new Date(data.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        cpu: data.cpu,
-        ram: data.ram
-      }]);
-    });
+
 
     newSocket.on('connect_error', (err) => {
       console.warn('Socket connection error (benign in preview):', err.message);
@@ -5777,7 +5770,6 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
               { id: 'skychat', icon: MessageSquare, label: t.skychat },
               { id: 'clock', icon: Clock, label: t.clock },
               { id: 'calculator', icon: Calculator, label: t.aerocalc },
-              { id: 'resources', icon: Activity, label: t.telemetry },
               { id: 'profile', icon: User, label: t.profile },
             ].map((tab) => (
               <motion.button
@@ -6456,85 +6448,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                 </motion.div>
               )}
 
-              {activeTab === 'resources' && (
-                <motion.div
-                  key="resources"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-8"
-                >
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-3xl font-black italic glossy-text uppercase">{t.telemetry}</h2>
-                          <div className="flex gap-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{t.telemetryRealtime}</span>
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="vista-gadget space-y-4">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-widest text-red-500"><Cpu className="w-5 h-5" /> {t.cpuLoad}</h3>
-                              <span className="text-2xl font-black text-red-500">{resourceData[resourceData.length - 1]?.cpu || 0}%</span>
-                            </div>
-                            <div className="h-48 min-h-[200px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={resourceData}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                  <Area type="stepAfter" dataKey="cpu" stroke="#ff0000" fill="#ff000020" strokeWidth={2} />
-                                </AreaChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </div>
-
-                          <div className="vista-gadget space-y-4">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-widest text-red-500"><Database className="w-5 h-5" /> {t.memoryUsage}</h3>
-                              <span className="text-2xl font-black text-red-500">{resourceData[resourceData.length - 1]?.ram || 0}%</span>
-                            </div>
-                      <div className="h-48 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={resourceData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                            <Area type="monotone" dataKey="ram" stroke="#ffffff" fill="#ffffff10" strokeWidth={2} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-
-                  <GlassCard>
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/10">
-                          <th className="pb-4">{t.process}</th>
-                          <th className="pb-4">{t.status}</th>
-                          <th className="pb-4">CPU</th>
-                          <th className="pb-4">{t.memory}</th>
-                        </tr>
-                      </thead>
-                          <tbody className="text-sm">
-                            {[
-                              { name: 'PhotoParser.exe', status: t.running, cpu: '1.2%', mem: '124MB' },
-                              { name: 'RSS_Daemon.sys', status: t.idle, cpu: '0.1%', mem: '12MB' },
-                              { name: 'AeroEngine.dll', status: t.running, cpu: '4.5%', mem: '256MB' },
-                              { name: 'PlaneDrop.svc', status: t.listening, cpu: '0.0%', mem: '8MB' },
-                            ].map((p, i) => (
-                              <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                <td className="py-4 font-bold">{p.name}</td>
-                                <td className="py-4"><span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-[10px] font-bold uppercase">{p.status}</span></td>
-                                <td className="py-4 font-mono text-red-500">{p.cpu}</td>
-                                <td className="py-4 font-mono text-white/60">{p.mem}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                    </table>
-                  </GlassCard>
-                </motion.div>
-              )}
 
               {activeTab === 'flexpics' && (
                 <motion.div
