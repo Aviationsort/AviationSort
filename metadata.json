@@ -1,0 +1,5 @@
+{
+  "name": "AviationSort Web",
+  "description": "A comprehensive aviation enthusiast dashboard with photo management, news, and scientific tools, featuring a Frutiger Aero Red & Black aesthetic.",
+  "requestFramePermissions": ["geolocation"]
+}
