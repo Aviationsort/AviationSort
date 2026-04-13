@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import io, { Socket } from 'socket.io-client';
+
 import {
   Plane,
   Newspaper,
@@ -286,7 +286,7 @@ const SkyDropModal = ({ isOpen, onClose, nearbyUsers, isScanning }: { isOpen: bo
                 className="absolute z-20 flex flex-col items-center gap-1 group"
               >
                 <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-br from-red-500 to-black shadow-xl">
-                  <img src={user.avatar} className="w-full h-full rounded-full object-cover border-2 border-white/10" />
+                  <img src={user.avatar} alt={`${user.username} avatar`} className="w-full h-full rounded-full object-cover border-2 border-white/10" />
                 </div>
                 <span className="text-[10px] font-black text-white/80 group-hover:text-red-500 transition-colors">{user.username}</span>
               </motion.button>
@@ -775,7 +775,6 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
               )}
 
               <AeroButton
-                type="submit"
                 className="w-full"
                 disabled={loading}
               >
@@ -5047,7 +5046,7 @@ export default function App() {
     description: 'clear sky'
   });
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
-  const [socket, setSocket] = useState<any>(null);
+
   const [notifications, setNotifications] = useState<string[]>([]);
 
   // Authentication State
@@ -5079,7 +5078,7 @@ export default function App() {
   const [reelHashtags, setReelHashtags] = useState<string[]>(['lhr', 'a380']);
   const [newHashtag, setNewHashtag] = useState('');
   const [currentFileName, setCurrentFileName] = useState<string>('');
-  const [lang, setLang] = useState<'en' | 'fr'>('en');
+  const [lang, setLang] = useState<'en' | 'fr' | 'ar'>('en');
   const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
 
   // Profile State
@@ -5164,23 +5163,14 @@ export default function App() {
     }
   }, [isLoggedIn]);
 
-  // Socket Connection
+  // Initial Weather Fetch
   useEffect(() => {
-    const newSocket = io();
-    setSocket(newSocket);
-
-
-
-    newSocket.on('connect_error', (err) => {
-      console.warn('Socket connection error (benign in preview):', err.message);
-    });
-
     const fetchInitialWeather = async () => {
 const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
       try {
         navigator.geolocation.getCurrentPosition(async (position) => {
           const { latitude, longitude } = position.coords;
-          const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=${lang === 'arz' ? 'ar' : lang}`);
+          const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=${lang === 'ar' ? 'ar' : lang}`);
           const data = await response.json();
           
           const aqiResponse = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${apiKey}`);
@@ -5191,7 +5181,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             condition: data.weather[0].main,
             description: data.weather[0].description,
             wind: data.wind.speed,
-            visibility: data.visibility,
+            visibility: data.main.visibility,
             humidity: data.main.humidity,
             pressure: data.main.pressure,
             aqi: aqiData.list[0].main.aqi,
@@ -5199,7 +5189,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             icon: data.weather[0].icon
           });
         }, async () => {
-          const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey}&units=metric&lang=${lang === 'arz' ? 'ar' : lang}`);
+          const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey}&units=metric&lang=${lang === 'ar' ? 'ar' : lang}`);
           const data = await response.json();
           const aqiResponse = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${data.coord.lat}&lon=${data.coord.lon}&appid=${apiKey}`);
           const aqiData = await aqiResponse.json();
@@ -5208,7 +5198,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             condition: data.weather[0].main,
             description: data.weather[0].description,
             wind: data.wind.speed,
-            visibility: data.visibility,
+            visibility: data.main.visibility,
             humidity: data.main.humidity,
             pressure: data.main.pressure,
             aqi: aqiData.list[0].main.aqi,
@@ -5221,46 +5211,6 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
       }
     };
     fetchInitialWeather();
-
-    newSocket.on('receive_message', (msg) => {
-      setChats(prev => prev.map(chat => {
-        if (chat.id === msg.chatId) {
-          return {
-            ...chat,
-            lastMessage: msg.text,
-            time: 'Just now',
-            messages: [...chat.messages, { ...msg, isMe: msg.senderId === 'me' }]
-          };
-        }
-        return chat;
-      }));
-
-      if (activeChatRef.current?.id === msg.chatId && msg.senderId !== 'me') {
-        newSocket.emit('mark_read', { chatId: msg.chatId, messageIds: [msg.id] });
-      }
-    });
-
-    newSocket.on('user_typing', (data: { username: string, isTyping: boolean }) => {
-      setIsTyping(prev => ({ ...prev, [data.username]: data.isTyping }));
-    });
-
-    newSocket.on('messages_read', (data: { messageIds: string[] }) => {
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        messages: chat.messages.map(m => data.messageIds.includes(m.id) ? { ...m, isRead: true } : m)
-      })));
-    });
-
-    newSocket.on('notification', (notif) => {
-      setNotifications(prev => [...prev, `${notif.username} sent you a friend request!`]);
-      setTimeout(() => setNotifications(prev => prev.slice(1)), 5000);
-      // Refresh requests
-      fetch('/api/friend-requests').then(res => res.json()).then(setRequests);
-    });
-
-    return () => {
-      newSocket.close();
-    };
   }, []);
 
   // Initial Data Fetching
@@ -5450,24 +5400,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
     processBatch(0);
   };
 
-  // Mock Resource Data Generator
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setResourceData(prev => {
-        // More dynamic telemetry that reacts to app state
-        const baseCpu = isParsing ? 60 : 15;
-        const baseRam = isParsing ? 70 : 45;
-        
-        const newData = [...prev, { 
-          time: new Date().toLocaleTimeString(), 
-          cpu: Math.min(100, Math.max(0, baseCpu + Math.floor(Math.random() * 20) - 10)),
-          ram: Math.min(100, Math.max(0, baseRam + Math.floor(Math.random() * 10) - 5))
-        }].slice(-20);
-        return newData;
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isParsing]);
+
 
   const filteredPhotos = useMemo(() => {
     const filtered = photos.filter(p => 
@@ -5583,34 +5516,31 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
   const activeChatRef = useRef<Chat | null>(null);
   useEffect(() => {
     activeChatRef.current = activeChat;
-    if (activeChat && socket) {
-      const unreadMessageIds = activeChat.messages
-        .filter(m => !m.isMe && !m.isRead)
-        .map(m => m.id);
-      
-      if (unreadMessageIds.length > 0) {
-        socket.emit('mark_read', { chatId: activeChat.id, messageIds: unreadMessageIds });
-      }
+    if (activeChat) {
+      // Mark messages as read locally
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChat.id) {
+          return {
+            ...chat,
+            messages: chat.messages.map(m => ({ ...m, isRead: true }))
+          };
+        }
+        return chat;
+      }));
     }
-  }, [activeChat, socket]);
+  }, [activeChat]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setMessageInput(e.target.value);
-    if (!socket || !activeChat) return;
-
-    socket.emit('typing', { chatId: activeChat.id, username: 'Spotter', isTyping: true });
+    if (!activeChat) return;
     
     if (typingTimeoutRef.current[activeChat.id]) {
       clearTimeout(typingTimeoutRef.current[activeChat.id]);
     }
-
-    typingTimeoutRef.current[activeChat.id] = setTimeout(() => {
-      socket.emit('typing', { chatId: activeChat.id, username: 'Spotter', isTyping: false });
-    }, 2000);
   };
 
   const sendMessage = () => {
-    if (!messageInput.trim() || !activeChat || !socket) return;
+    if (!messageInput.trim() || !activeChat) return;
     
     const newMessage = {
       id: Date.now().toString(),
@@ -5618,26 +5548,50 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
       senderId: 'me',
       text: messageInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isRead: true
     };
 
-    socket.emit('send_message', newMessage);
+    // Add message locally
+    setChats(prev => prev.map(chat => {
+      if (chat.id === activeChat.id) {
+        return {
+          ...chat,
+          lastMessage: newMessage.text,
+          time: newMessage.time,
+          messages: [...chat.messages, newMessage]
+        };
+      }
+      return chat;
+    }));
+    
     setMessageInput('');
 
-    // Simulation: Friend typing back and replying
-    const friendUsername = activeChat.username;
+    // Simulation: Friend replying
     const chatId = activeChat.id;
     setTimeout(() => {
-      socket.emit('typing', { chatId, username: friendUsername, isTyping: true });
+      setIsTyping(prev => ({ ...prev, [activeChat.username]: true }));
       setTimeout(() => {
-        socket.emit('typing', { chatId, username: friendUsername, isTyping: false });
+        setIsTyping(prev => ({ ...prev, [activeChat.username]: false }));
         const reply = {
           id: (Date.now() + 1).toString(),
           chatId: chatId,
           senderId: chatId,
           text: "That's awesome! I'm heading to the airport now to catch some more shots. ✈️",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMe: false,
+          isRead: true
         };
-        socket.emit('send_message', reply);
+        setChats(prev => prev.map(chat => {
+          if (chat.id === activeChat.id) {
+            return {
+              ...chat,
+              lastMessage: reply.text,
+              time: reply.time,
+              messages: [...chat.messages, reply]
+            };
+          }
+          return chat;
+        }));
       }, 3000);
     }, 1500);
   };
@@ -5701,7 +5655,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
     } else if (val === '=') {
       try {
         // Simple eval for demo, in production use a math library
-        const result = eval(calcDisplay.replace('×', '*').replace('÷', '/'));
+        const result = new Function('return ' + calcDisplay.replace('×', '*').replace('÷', '/'))();
         setCalcHistory(prev => [`${calcDisplay} = ${result}`, ...prev].slice(0, 5));
         setCalcDisplay(String(result));
       } catch {

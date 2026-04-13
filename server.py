@@ -1,13 +1,9 @@
-import http.server
-import socketserver
+# type: ignore
+from flask import Flask, send_from_directory, request, jsonify
 import os
-import json
 import sqlite3
-from typing import Any, Dict, List
-from urllib.parse import urlparse, parse_qs
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
 
 print("AviationSort server starting...")
 
@@ -31,7 +27,7 @@ RSS_URLS = [
 
 # Initialize database
 print("Initializing database...")
-conn = sqlite3.connect('users.db')
+conn = sqlite3.connect('users.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -49,148 +45,165 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS profiles (
     isPrivate INTEGER
 )''')
 
-cursor.execute('''CREATE TABLE IF NOT EXISTS favorites (
-    username TEXT,
-    registration TEXT,
-    PRIMARY KEY (username, registration)
-)''')
-
 conn.commit()
-print("Database ready")
 
-def fetch_rss(url: str) -> List[Dict[str, str]]:
+# Initialize Flask app
+app = Flask(__name__, static_folder=DIRECTORY)
+
+# API Routes
+@app.route('/api/news')
+def get_news():
+    news_items = []
+    for url in RSS_URLS:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                tree = ET.parse(response)
+                root = tree.getroot()
+                
+                for item in root.findall('.//item')[:5]:
+                    news_item = {
+                        'title': item.findtext('title', ''),
+                        'link': item.findtext('link', ''),
+                        'description': item.findtext('description', ''),
+                        'pubDate': item.findtext('pubDate', ''),
+                        'source': url
+                    }
+                    news_items.append(news_item)
+        except Exception as e:
+            print(f"Failed to fetch {url}: {e}")
+    
+    return jsonify(news_items)
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+    user = cursor.fetchone()
+    
+    if user:
+        return jsonify({'success': True, 'message': 'Login successful'})
+    return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+
+@app.route('/api/signup', methods=['POST'])
+def signup():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
     try:
-        with urllib.request.urlopen(url, timeout=10) as f:
-            content = f.read().decode('utf-8')
-        root = ET.fromstring(content)
-        articles: List[Dict[str, str]] = []
-        for item in root.findall('.//item'):
-            title_elem = item.find('title')
-            title = title_elem.text if title_elem is not None and title_elem.text is not None else ''
-            description_elem = item.find('description')
-            description = description_elem.text if description_elem is not None and description_elem.text is not None else ''
-            link_elem = item.find('link')
-            link = link_elem.text if link_elem is not None and link_elem.text is not None else ''
-            pubdate_elem = item.find('pubDate')
-            pubdate_str = pubdate_elem.text if pubdate_elem is not None and pubdate_elem.text is not None else ''
-            try:
-                date = datetime.strptime(pubdate_str, '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d') if pubdate_str else datetime.now().strftime('%Y-%m-%d')
-            except ValueError:
-                date = datetime.now().strftime('%Y-%m-%d')
-            source = url.split('/')[2]
-            articles.append({
-                'id': str(len(articles) + 1),
-                'title': title,
-                'summary': description,
-                'date': date,
-                'url': link,
-                'source': source
-            })
-        return articles
-    except Exception:
-        return []
+        cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+        cursor.execute('INSERT INTO profiles (username, displayName, bio, homeAirport, favoriteAirline, equipment, isPrivate) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                      (username, 'Aviation Enthusiast', 'Passionate plane spotter', 'EGLL / LHR', 'Emirates', '', 0))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Signup successful'})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': 'Username already exists'}), 400
 
-class APIHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, directory=DIRECTORY, **kwargs)
+@app.route('/api/profile')
+def get_profile():
+    username = request.args.get('username', 'guest')
+    cursor.execute('SELECT * FROM profiles WHERE username = ?', (username,))
+    profile = cursor.fetchone()
+    
+    if profile:
+        return jsonify({
+            'displayName': profile[1],
+            'bio': profile[2],
+            'homeAirport': profile[3],
+            'favoriteAirline': profile[4],
+            'equipment': profile[5],
+            'isPrivate': bool(profile[6])
+        })
+    return jsonify({
+        'displayName': f'{username} Aviation Enthusiast',
+        'bio': f'Passionate about aviation ({username})',
+        'homeAirport': 'EGLL / LHR',
+        'favoriteAirline': 'Emirates',
+        'equipment': 'Sony A7R IV + 200-600mm',
+        'isPrivate': False
+    })
 
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-        query = parse_qs(parsed.query)
+@app.route('/api/profile', methods=['POST'])
+def update_profile():
+    data = request.get_json()
+    username = data.get('username')
+    
+    cursor.execute('''INSERT OR REPLACE INTO profiles 
+                     (username, displayName, bio, homeAirport, favoriteAirline, equipment, isPrivate)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                  (username, data.get('displayName'), data.get('bio'), 
+                   data.get('homeAirport'), data.get('favoriteAirline'),
+                   data.get('equipment'), data.get('isPrivate', 0)))
+    conn.commit()
+    return jsonify({'success': True})
 
-        if path.startswith('/api/'):
-            self.handle_api(path, query, 'GET')
-        elif path.startswith('/socket.io/'):
-            self.send_error(404, 'Real-time features not implemented')
-        else:
-            super().do_GET()
+@app.route('/api/friends')
+def get_friends():
+    return jsonify([{
+        'id': '1',
+        'username': 'aviator1',
+        'avatar': 'https://picsum.photos/100',
+        'bio': 'Aviation enthusiast',
+        'status': 'online'
+    }])
 
-    def do_POST(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
+@app.route('/api/friend-requests')
+def get_friend_requests():
+    return jsonify([])
 
-        if path.startswith('/api/'):
-            self.handle_api(path, {}, 'POST')
-        else:
-            self.send_error(404)
+@app.route('/api/favorites')
+def get_favorites():
+    return jsonify([])
 
-    def do_OPTIONS(self):
-        self.send_cors_headers()
-        self.end_headers()
+@app.route('/api/photos')
+def get_photos():
+    photos = []
+    for i in range(12):
+        photos.append({
+            'id': str(i + 1),
+            'url': f'https://picsum.photos/seed/aviation{i}/800/600',
+            'likes': 120 + i * 15,
+            'comments': 8 + i * 2,
+            'aircraft': f'Boeing 787-{i % 9 + 1}00',
+            'airline': 'Emirates',
+            'location': 'London Heathrow (EGLL)'
+        })
+    return jsonify(photos)
 
-    def send_cors_headers(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+@app.route('/api/stories')
+def get_stories():
+    stories = []
+    for i in range(6):
+        stories.append({
+            'id': str(i + 1),
+            'username': f'spotter{i + 1}',
+            'avatar': f'https://picsum.photos/seed/user{i}/100/100',
+            'image': f'https://picsum.photos/seed/story{i}/400/600',
+            'viewed': i < 2
+        })
+    return jsonify(stories)
 
-    def handle_api(self, path: str, query: Dict[str, List[str]], method: str) -> None:
-        self.send_cors_headers()
-        self.end_headers()
+# Serve static files
+@app.route('/vite.svg')
+def vite_svg():
+    return send_from_directory(DIRECTORY, 'vite.svg')
 
-        response: Any
+@app.route('/')
+def index():
+    return send_from_directory(DIRECTORY, 'index.html')
 
-        # Mock API responses
-        if path == '/api/photos':
-            response = []
+@app.route('/<path:path>')
+def serve_static(path):
+    try:
+        return send_from_directory(DIRECTORY, path)
+    except:
+        return send_from_directory(DIRECTORY, 'index.html')
 
-        elif path == '/api/news':
-            articles: List[Dict[str, str]] = []
-            for url in RSS_URLS:
-                articles.extend(fetch_rss(url))
-            sources: List[str] = list(set(a['source'] for a in articles))
-            response = {
-                'articles': articles[:20],  # Limit to 20
-                'sources': sources
-            }
-
-        elif path == '/api/stories':
-            response = []
-
-        elif path == '/api/friends':
-            response = [{
-                'id': '1',
-                'username': 'aviator1',
-                'avatar': 'https://picsum.photos/100',
-                'bio': 'Aviation enthusiast',
-                'status': 'online'
-            }]
-
-        elif path == '/api/friend-requests':
-            response = []
-
-        elif path == '/api/profile':
-            username = query.get('username', ['guest'])[0]
-            response = {
-                'displayName': f'{username} Aviation Enthusiast',
-                'bio': f'Passionate about aviation ({username})',
-                'homeAirport': 'EGLL / LHR',
-                'favoriteAirline': 'Emirates',
-                'equipment': 'Sony A7R IV + 200-600mm',
-                'isPrivate': False
-            }
-
-        elif path == '/api/favorites':
-            response = []
-
-        elif path in ['/api/login', '/api/signup', '/api/profile', '/api/favorite', '/api/friends', '/api/friend-requests']:
-            response = {'message': 'Success'}
-
-        else:
-            response: Any = {'error': 'Unknown endpoint'}
-
-        self.wfile.write(json.dumps(response).encode())
-
-    def log_message(self, format: str, *args: Any) -> None:
-        # Suppress log messages
-        pass
-
-print(f"Starting server on port {PORT}...")
-try:
-    with socketserver.TCPServer(("", PORT), APIHandler) as httpd:
-        print(f"Server running at http://localhost:{PORT}")
-        print("Press Ctrl+C to stop")
-        httpd.serve_forever()
-except Exception as e:
-    print(f"Server error: {e}")
+if __name__ == '__main__':
+    print(f"Starting server on port {PORT}...")
+    print(f"Server running at http://localhost:{PORT}")
+    print("Press Ctrl+C to stop")
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

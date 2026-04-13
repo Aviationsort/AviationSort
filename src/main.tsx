@@ -3,6 +3,8 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+
+
 // Suppress benign Vite HMR WebSocket errors that can cause unhandled rejections in some environments
 window.addEventListener('unhandledrejection', (event) => {
   if (event.reason && (
