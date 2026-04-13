@@ -12,15 +12,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import io, { Socket } from 'socket.io-client';
-import { 
-  Plane, 
-  Newspaper, 
-  Calculator, 
-  Activity, 
-  User, 
-  Heart, 
-  Search, 
-  ChevronLeft, 
+import {
+  Plane,
+  Newspaper,
+  Calculator,
+  Activity,
+  User,
+  Heart,
+  Search,
+  ChevronLeft,
   ChevronRight,
   Maximize2,
   X,
@@ -58,7 +58,8 @@ import {
   Navigation,
   MapPin,
   Droplets,
-  Thermometer
+  Thermometer,
+  LogOut
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { 
@@ -84,6 +85,7 @@ interface Photo {
   date: string;
   isFavorite: boolean;
   hashtags?: string[];
+  isVideo?: boolean;
 }
 
 interface NewsItem {
@@ -161,7 +163,6 @@ interface ProfileData {
   homeAirport: string;
   favoriteAirline: string;
   equipment: string;
-  location: string;
   isPrivate: boolean;
 }
 
@@ -326,11 +327,20 @@ const PhotoCard = React.memo(({ photo, onClick, toggleFavorite }: { photo: Photo
     onClick={onClick}
   >
     <div className="aspect-[4/3] rounded-2xl overflow-hidden relative shadow-inner border border-white/10 bg-black">
-      <img 
-        src={photo.url} 
-        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-        loading="lazy" 
-      />
+      {photo.isVideo ? (
+        <video
+          src={photo.url}
+          className="w-full h-full object-cover"
+          controls
+          preload="metadata"
+        />
+      ) : (
+        <img
+          src={photo.url}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          loading="lazy"
+        />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       <button 
         onClick={(e) => {
@@ -679,6 +689,119 @@ const WeatherModal = ({ isOpen, onClose, t, lang }: { isOpen: boolean, onClose: 
   );
 };
 
+const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () => void, onLogin: (username: string) => void }) => {
+  const [isSignup, setIsSignup] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const endpoint = isSignup ? '/api/signup' : '/api/login';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        onLogin(username);
+        onClose();
+      } else {
+        setError(data.error || 'Authentication failed');
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="w-full max-w-md aero-container p-8 flex flex-col gap-6 relative overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="aero-gloss-overlay" />
+
+            <div className="text-center space-y-2">
+              <h2 className="text-3xl font-black italic glossy-text uppercase tracking-tighter">
+                {isSignup ? 'Join AviationSort' : 'Welcome Back'}
+              </h2>
+              <p className="text-xs text-white/40 font-bold uppercase tracking-widest">
+                {isSignup ? 'Create your account' : 'Sign in to your account'}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="aero-input w-full"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-white/40 uppercase font-bold">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="aero-input w-full"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-500/20 border border-red-500/50 p-3 rounded-xl text-red-500 text-xs font-bold uppercase tracking-widest text-center">
+                  {error}
+                </div>
+              )}
+
+              <AeroButton
+                type="submit"
+                className="w-full"
+                disabled={loading}
+              >
+                {loading ? 'Processing...' : (isSignup ? 'Create Account' : 'Sign In')}
+              </AeroButton>
+            </form>
+
+            <div className="text-center">
+              <button
+                onClick={() => setIsSignup(!isSignup)}
+                className="text-xs text-white/60 hover:text-red-500 transition-colors uppercase tracking-widest font-bold"
+              >
+                {isSignup ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+              </button>
+            </div>
+
+            <AeroButton variant="black" className="w-full" onClick={onClose}>
+              Cancel
+            </AeroButton>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 // --- Main App ---
 
 const TRANSLATIONS = {
@@ -818,7 +941,8 @@ const TRANSLATIONS = {
     close: "Close",
     date: "Date",
     locationLabel: "Location",
-    resetRadar: "Reset Radar"
+    resetRadar: "Reset Radar",
+    politicalNews: "Political News"
   },
   fr: {
     dashboard: "Tableau de bord",
@@ -955,7 +1079,8 @@ const TRANSLATIONS = {
     close: "Fermer",
     date: "Date",
     locationLabel: "Emplacement",
-    resetRadar: "Réinitialiser le radar"
+    resetRadar: "Réinitialiser le radar",
+    politicalNews: "Actualités Politiques"
   },
   nl: {
     dashboard: "Dashboard",
@@ -4665,7 +4790,7 @@ const TRANSLATIONS = {
   }
 };
 
-const AeroWatch = ({ className, lang = 'en' }: { className?: string, lang?: string }) => {
+const AeroWatch = ({ className, lang = 'en', style = 'analog' }: { className?: string, lang?: string, style?: 'analog' | 'chronograph' | 'digital' | 'aviator' | 'military' | 'racing' | 'luxury' | 'smart' }) => {
   const [time, setTime] = useState(new Date());
   const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
 
@@ -4680,6 +4805,21 @@ const AeroWatch = ({ className, lang = 'en' }: { className?: string, lang?: stri
   const utcTime = new Date(time.getTime() + time.getTimezoneOffset() * 60000);
   const utcHours = utcTime.getHours();
   const utcMinutes = utcTime.getMinutes();
+
+  if (style === 'digital') {
+    return (
+      <div className={cn("relative w-64 h-32 md:w-96 md:h-48 bg-black border-[6px] md:border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9)] flex items-center justify-center overflow-hidden", className)}>
+        <div className="text-center space-y-2">
+          <div className="text-2xl md:text-4xl font-mono font-bold text-green-400">
+            {hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+          </div>
+          <div className="text-sm md:text-lg font-mono text-green-400/60">
+            {new Date().toLocaleDateString()}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative w-32 h-32 md:w-44 md:h-44 rounded-full bg-black border-[6px] md:border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9),inset_0_2px_15px_rgba(255,255,255,0.05)] flex items-center justify-center overflow-hidden", className)}>
@@ -4910,10 +5050,16 @@ export default function App() {
   const [socket, setSocket] = useState<any>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
 
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [calcDisplay, setCalcDisplay] = useState('0');
   const [calcHistory, setCalcHistory] = useState<string[]>([]);
+  const [calcMode, setCalcMode] = useState<'standard' | 'scientific' | 'analytical'>('standard');
   const [resourceData, setResourceData] = useState<{ time: string; cpu: number; ram: number }[]>([]);
   
   // SkyChat State
@@ -4934,7 +5080,7 @@ export default function App() {
   const [reelHashtags, setReelHashtags] = useState<string[]>(['lhr', 'a380']);
   const [newHashtag, setNewHashtag] = useState('');
   const [currentFileName, setCurrentFileName] = useState<string>('');
-  const [lang, setLang] = useState<'en' | 'fr' | 'nl' | 'arz' | 'mo' | 'de' | 'it' | 'el' | 'ab' | 'tr' | 'hy' | 'hu' | 'lv' | 'iu' | 'es' | 'pt' | 'pl' | 'ru' | 'cs' | 'eu' | 'ku' | 'ca' | 'fi' | 'no' | 'hr' | 'sr' | 'ka'>('en');
+  const [lang, setLang] = useState<'en' | 'fr'>('en');
   const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
 
   // Profile State
@@ -4944,7 +5090,6 @@ export default function App() {
     homeAirport: 'EGLL / LHR',
     favoriteAirline: 'Emirates',
     equipment: 'Sony A7R IV + 200-600mm',
-    location: 'London, UK',
     isPrivate: false
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -4952,11 +5097,73 @@ export default function App() {
   // RSS Pagination State
   const [newsPage, setNewsPage] = useState(1);
   const [newsPerPage, setNewsPerPage] = useState(10);
+  const [newsTab, setNewsTab] = useState<'aviation' | 'political'>('aviation');
+  const [watchStyle, setWatchStyle] = useState<'analog' | 'chronograph' | 'digital' | 'aviator' | 'military' | 'racing' | 'luxury' | 'smart'>('analog');
 
   // SkyChat Matching State
   const [showMatching, setShowMatching] = useState(false);
   const [matchingIndex, setMatchingIndex] = useState(0);
   const [matches, setMatches] = useState<Friend[]>([]);
+
+  // Authentication Functions
+  const handleLogin = async (username: string) => {
+    setCurrentUser(username);
+    setIsLoggedIn(true);
+    setIsAuthModalOpen(false);
+
+    // Load user profile
+    try {
+      const profileRes = await fetch(`/api/profile?username=${username}`);
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        setProfile({
+          displayName: profileData.displayName || 'Aviation Enthusiast',
+          bio: profileData.bio || 'Passionate plane spotter',
+          homeAirport: profileData.homeAirport || 'EGLL / LHR',
+          favoriteAirline: profileData.favoriteAirline || 'Emirates',
+          equipment: profileData.equipment || 'Sony A7R IV + 200-600mm',
+          isPrivate: profileData.isPrivate || false
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+    }
+
+    // Load favorites
+    try {
+      const favoritesRes = await fetch(`/api/favorites?username=${username}`);
+      if (favoritesRes.ok) {
+        const favorites = await favoritesRes.json();
+        setPhotos(prev => prev.map(p => ({
+          ...p,
+          isFavorite: favorites.includes(p.registration)
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to load favorites:', err);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsLoggedIn(false);
+    setProfile({
+      displayName: 'Aviation Enthusiast',
+      bio: 'Passionate plane spotter based in London. Love wide-body aircraft and special liveries.',
+      homeAirport: 'EGLL / LHR',
+      favoriteAirline: 'Emirates',
+      equipment: 'Sony A7R IV + 200-600mm',
+      isPrivate: false
+    });
+    setPhotos(prev => prev.map(p => ({ ...p, isFavorite: false })));
+  };
+
+  // Check authentication on startup
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setIsAuthModalOpen(true);
+    }
+  }, [isLoggedIn]);
 
   // Socket Connection
   useEffect(() => {
@@ -5207,7 +5414,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
       
       for (let i = 0; i < chunk.length; i++) {
         const file = chunk[i] as File;
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
           const name = file.name.replace(/\.[^/.]+$/, "");
           let registration = 'Unknown';
           let date = 'Unknown';
@@ -5229,7 +5436,8 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             airline,
             aircraftType: 'Parsed Aircraft',
             date,
-            isFavorite: false
+            isFavorite: false,
+            isVideo: file.type.startsWith('video/')
           });
         }
       }
@@ -5319,14 +5527,20 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
     const newFavoriteStatus = !photo.isFavorite;
     
+    if (!currentUser) return;
+
     try {
-      await fetch('/api/photos/favorite', {
+      await fetch('/api/favorite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, isFavorite: newFavoriteStatus })
+        body: JSON.stringify({
+          username: currentUser,
+          registration: photo.registration,
+          isFavorite: newFavoriteStatus
+        })
       });
-      
-      setPhotos(prev => prev.map(p => 
+
+      setPhotos(prev => prev.map(p =>
         p.id === id ? { ...p, isFavorite: newFavoriteStatus } : p
       ));
     } catch (err) {
@@ -5446,14 +5660,34 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
   const [isSlideshow, setIsSlideshow] = useState(false);
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
+    if (!currentUser) return;
+
     setIsSavingProfile(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSavingProfile(false);
-      setNotifications(prev => [...prev, "Profile updated successfully!"]);
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: currentUser,
+          profile: profile
+        })
+      });
+
+      if (response.ok) {
+        setNotifications(prev => [...prev, "Profile updated successfully!"]);
+        setTimeout(() => setNotifications(prev => prev.slice(1)), 5000);
+      } else {
+        setNotifications(prev => [...prev, "Failed to update profile"]);
+        setTimeout(() => setNotifications(prev => prev.slice(1)), 5000);
+      }
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+      setNotifications(prev => [...prev, "Failed to update profile"]);
       setTimeout(() => setNotifications(prev => prev.slice(1)), 5000);
-    }, 1500);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   useEffect(() => {
@@ -5514,51 +5748,14 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             </div>
           </div>
 
-          <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-between md:justify-end overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0">
-              {([
-                { id: 'en', flag: '🇬🇧' },
-                { id: 'fr', flag: '🇫🇷' },
-                { id: 'nl', flag: '🇳🇱' },
-                { id: 'arz', flag: '🇱🇧' },
-                { id: 'mo', flag: '🇲🇨' },
-                { id: 'de', flag: '🇩🇪' },
-                { id: 'it', flag: '🇮🇹' },
-                { id: 'el', flag: '🇬🇷' },
-                { id: 'ab', flag: '🇬🇪' },
-                { id: 'tr', flag: '🇹🇷' },
-                { id: 'hy', flag: '🇦🇲' },
-                { id: 'hu', flag: '🇭🇺' },
-                { id: 'lv', flag: '🇱🇻' },
-                { id: 'iu', flag: '🇨🇦' },
-                { id: 'es', flag: '🇪🇸' },
-                { id: 'pt', flag: '🇵🇹' },
-                { id: 'pl', flag: '🇵🇱' },
-                { id: 'ru', flag: '🇷🇺' },
-                { id: 'cs', flag: '🇨🇿' },
-                { id: 'eu', flag: '🇪🇸' },
-                { id: 'ku', flag: '☀️' },
-                { id: 'ca', flag: '🇦🇩' },
-                { id: 'fi', flag: '🇫🇮' },
-                { id: 'no', flag: '🇳🇴' },
-                { id: 'hr', flag: '🇭🇷' },
-                { id: 'sr', flag: '🇷🇸' },
-                { id: 'ka', flag: '🇬🇪' }
-              ] as const).map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => setLang(l.id)}
-                  className={cn(
-                    "w-8 h-8 flex items-center justify-center rounded-full text-[14px] transition-all shrink-0 relative overflow-hidden group/lang",
-                    lang === l.id ? "bg-red-600 shadow-[0_0_15px_rgba(255,0,0,0.5)] scale-110" : "hover:bg-white/10 opacity-60 hover:opacity-100 grayscale hover:grayscale-0"
-                  )}
-                  title={l.id.toUpperCase()}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover/lang:opacity-100 transition-opacity" />
-                  <span className="relative z-10">{l.flag}</span>
-                </button>
-              ))}
-            </div>
+            <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-between md:justify-end overflow-x-auto no-scrollbar">
+              <button
+                onClick={() => setLang(lang === 'en' ? 'fr' : 'en')}
+                className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0 hover:bg-white/10 transition-colors"
+              >
+                <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : '🇫🇷'}</span>
+                <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : 'FR'}</span>
+              </button>
             <div className="aero-window-controls shrink-0">
               <button className="aero-control-btn"><Minus className="w-4 h-4" /></button>
               <button className="aero-control-btn"><Square className="w-3 h-3" /></button>
@@ -5903,15 +6100,29 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                         <span className="text-[10px] font-black uppercase tracking-widest">{t.adjustAlgorithm}</span>
                       </div>
                       <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder={t.addHashtag} 
+                        <input
+                          type="text"
+                          placeholder={t.addHashtag}
                           value={newHashtag}
                           onChange={(e) => setNewHashtag(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && addHashtag()}
                           className="aero-input text-xs w-32"
                         />
-                        <AeroButton variant="red" className="px-3 py-1 text-[10px]" onClick={addHashtag}>{t.addFolder}</AeroButton>
+                        <AeroButton variant="red" className="px-3 py-1 text-[10px]" onClick={addHashtag}>Add</AeroButton>
+                      </div>
+                      <div className="flex gap-2">
+                        <AeroButton variant="black" className="px-3 py-1 text-[10px]" onClick={() => {
+                          const tags = photos.flatMap(p => p.hashtags || []).filter((tag, i, arr) => arr.indexOf(tag) === i);
+                          setReelHashtags(prev => [...new Set([...prev, ...tags])]);
+                        }}>
+                          From Album
+                        </AeroButton>
+                        <AeroButton variant="black" className="px-3 py-1 text-[10px]" onClick={() => {
+                          const tags = flexPics.flatMap(p => p.hashtags || []).filter((tag, i, arr) => arr.indexOf(tag) === i);
+                          setReelHashtags(prev => [...new Set([...prev, ...tags])]);
+                        }}>
+                          From FlexPics
+                        </AeroButton>
                       </div>
                       <div className="flex flex-wrap gap-2 max-w-xs">
                         {reelHashtags.map(tag => (
@@ -6004,8 +6215,12 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                 >
                   <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                     <div className="space-y-2">
-                      <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">{t.aviationNews}</h2>
-                      <p className="text-xs text-white/40 font-bold uppercase tracking-widest">{t.newsCredit}</p>
+                      <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">
+                        {newsTab === 'aviation' ? t.aviationNews : t.politicalNews}
+                      </h2>
+                      <p className="text-xs text-white/40 font-bold uppercase tracking-widest">
+                        {newsTab === 'aviation' ? t.newsCredit : 'Coming Soon'}
+                      </p>
                     </div>
                     
                     <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
@@ -6030,8 +6245,26 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                     </div>
                   </div>
 
+                  <div className="flex gap-2">
+                    <AeroButton
+                      variant={newsTab === 'aviation' ? 'red' : 'black'}
+                      className="px-6 py-2"
+                      onClick={() => setNewsTab('aviation')}
+                    >
+                      Aviation News
+                    </AeroButton>
+                    <AeroButton
+                      variant={newsTab === 'political' ? 'red' : 'black'}
+                      className="px-6 py-2"
+                      onClick={() => setNewsTab('political')}
+                    >
+                      Political News
+                    </AeroButton>
+                  </div>
+
                   <div className="space-y-4">
-                    {news.slice((newsPage - 1) * newsPerPage, newsPage * newsPerPage).map(item => (
+                    {newsTab === 'aviation' ? (
+                      news.slice((newsPage - 1) * newsPerPage, newsPage * newsPerPage).map(item => (
                       <GlassCard 
                         key={item.id} 
                         className="hover:border-red-500/30 transition-colors group cursor-pointer"
@@ -6058,10 +6291,21 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                           </div>
                         </div>
                       </GlassCard>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-20 gap-6">
+                        <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shadow-inner">
+                          <Newspaper className="w-12 h-12 text-white/20" />
+                        </div>
+                        <div className="text-center space-y-2">
+                          <h3 className="text-xl font-black italic uppercase glossy-text">Coming Soon</h3>
+                          <p className="text-sm text-white/40 max-w-xs">Political news feeds will be available in a future update.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {Math.ceil(news.length / newsPerPage) > 1 && (
+                  {newsTab === 'aviation' && Math.ceil(news.length / newsPerPage) > 1 && (
                     <div className="flex items-center justify-center gap-4 pt-8">
                       <AeroButton 
                         variant="black" 
@@ -6097,6 +6341,24 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                 >
                   <div className="w-full lg:w-96 aero-container p-8 space-y-6 relative">
                     <div className="aero-card-highlight" />
+
+                    <div className="flex gap-2 justify-center">
+                      {[
+                        { id: 'standard', label: 'Standard' },
+                        { id: 'scientific', label: 'Scientific' },
+                        { id: 'analytical', label: 'Analytical' }
+                      ].map((mode) => (
+                        <AeroButton
+                          key={mode.id}
+                          variant={calcMode === mode.id ? 'red' : 'black'}
+                          className="px-3 py-1 text-xs"
+                          onClick={() => setCalcMode(mode.id as any)}
+                        >
+                          {mode.label}
+                        </AeroButton>
+                      ))}
+                    </div>
+
                     <div className="bg-black/80 rounded-[2rem] p-6 text-right border border-white/20 shadow-[inset_0_4px_10px_rgba(0,0,0,0.8)] relative overflow-hidden group">
                       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
                       <div className="text-xs text-white/30 font-mono h-6 overflow-hidden truncate mb-1">
@@ -6108,19 +6370,40 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                     </div>
 
                     <div className="grid grid-cols-4 gap-3">
-                      {[
+                      {(calcMode === 'scientific' ? [
+                        { label: 'sin', type: 'func' }, { label: 'cos', type: 'func' }, { label: 'tan', type: 'func' }, { label: 'C', type: 'clear' },
+                        { label: '7', type: 'num' }, { label: '8', type: 'num' }, { label: '9', type: 'num' }, { label: '÷', type: 'op' },
+                        { label: '4', type: 'num' }, { label: '5', type: 'num' }, { label: '6', type: 'num' }, { label: '×', type: 'op' },
+                        { label: '1', type: 'num' }, { label: '2', type: 'num' }, { label: '3', type: 'num' }, { label: '-', type: 'op' },
+                        { label: '0', type: 'num' }, { label: '.', type: 'num' }, { label: 'lbs>kg', type: 'func' }, { label: '+', type: 'op' }
+                      ] : calcMode === 'analytical' ? [
                         { label: 'C', type: 'clear' }, { label: '(', type: 'op' }, { label: ')', type: 'op' }, { label: '÷', type: 'op' },
                         { label: '7', type: 'num' }, { label: '8', type: 'num' }, { label: '9', type: 'num' }, { label: '×', type: 'op' },
                         { label: '4', type: 'num' }, { label: '5', type: 'num' }, { label: '6', type: 'num' }, { label: '-', type: 'op' },
                         { label: '1', type: 'num' }, { label: '2', type: 'num' }, { label: '3', type: 'num' }, { label: '+', type: 'op' },
                         { label: '0', type: 'num' }, { label: '.', type: 'num' }, { label: 'lbs>kg', type: 'func' }, { label: '=', type: 'equal' }
-                      ].map(btn => (
+                      ] : [
+                        { label: 'C', type: 'clear' }, { label: '(', type: 'op' }, { label: ')', type: 'op' }, { label: '÷', type: 'op' },
+                        { label: '7', type: 'num' }, { label: '8', type: 'num' }, { label: '9', type: 'num' }, { label: '×', type: 'op' },
+                        { label: '4', type: 'num' }, { label: '5', type: 'num' }, { label: '6', type: 'num' }, { label: '-', type: 'op' },
+                        { label: '1', type: 'num' }, { label: '2', type: 'num' }, { label: '3', type: 'num' }, { label: '+', type: 'op' },
+                        { label: '0', type: 'num' }, { label: '.', type: 'num' }, { label: 'lbs>kg', type: 'func' }, { label: '=', type: 'equal' }
+                      ]).map(btn => (
                         <button
                           key={btn.label}
                           onClick={() => {
                             if (btn.label === 'lbs>kg') {
                               const val = parseFloat(calcDisplay);
                               if (!isNaN(val)) setCalcDisplay(String((val * 0.453592).toFixed(2)));
+                            } else if (btn.label === 'sin') {
+                              const val = parseFloat(calcDisplay);
+                              if (!isNaN(val)) setCalcDisplay(String(Math.sin(val * Math.PI / 180).toFixed(4)));
+                            } else if (btn.label === 'cos') {
+                              const val = parseFloat(calcDisplay);
+                              if (!isNaN(val)) setCalcDisplay(String(Math.cos(val * Math.PI / 180).toFixed(4)));
+                            } else if (btn.label === 'tan') {
+                              const val = parseFloat(calcDisplay);
+                              if (!isNaN(val)) setCalcDisplay(String(Math.tan(val * Math.PI / 180).toFixed(4)));
                             } else {
                               handleCalcInput(btn.label);
                             }
@@ -6403,7 +6686,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                             </motion.div>
                           )}
                         </div>
-                        <p className="text-white/40 font-bold tracking-widest uppercase text-xs">{t.memberSince} April 2024 • {profile.location}</p>
+                        <p className="text-white/40 font-bold tracking-widest uppercase text-xs">{t.memberSince} April 2024</p>
                       </div>
                       <div className="flex flex-wrap justify-center md:justify-start gap-3">
                         <AeroButton onClick={() => setShowQR(true)} variant="red" className="text-xs">
@@ -6412,8 +6695,8 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                         <AeroButton variant="black" className="text-xs" onClick={handleSkyDrop}>
                           <Plane className="w-4 h-4" /> {t.skydrop}
                         </AeroButton>
-                        <AeroButton 
-                          variant="red" 
+                        <AeroButton
+                          variant="red"
                           className="text-xs"
                           onClick={saveProfile}
                           disabled={isSavingProfile}
@@ -6429,6 +6712,13 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                             <Check className="w-4 h-4" />
                           )}
                           {isSavingProfile ? t.saving : t.saveProfile}
+                        </AeroButton>
+                        <AeroButton
+                          variant="black"
+                          className="text-xs"
+                          onClick={handleLogout}
+                        >
+                          <LogOut className="w-4 h-4" /> Logout
                         </AeroButton>
                       </div>
                     </div>
@@ -6466,15 +6756,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                                 className="aero-input w-full h-24 resize-none" 
                               />
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.location}</label>
-                              <input 
-                                type="text" 
-                                value={profile.location} 
-                                onChange={(e) => setProfile(prev => ({ ...prev, location: e.target.value }))}
-                                className="aero-input w-full" 
-                              />
-                            </div>
+
                           </div>
                         </GlassCard>
 
@@ -6897,10 +7179,32 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                     <h2 className="text-5xl font-black italic glossy-text uppercase tracking-tighter">{t.clock}</h2>
                     <p className="text-white/40 font-bold uppercase tracking-[0.4em]">{t.aeroTime}</p>
                   </div>
-                  
+
+                  <div className="flex flex-wrap justify-center gap-2 mb-8">
+                    {[
+                      { id: 'analog', label: 'Analog' },
+                      { id: 'chronograph', label: 'Chronograph' },
+                      { id: 'digital', label: 'Digital' },
+                      { id: 'aviator', label: 'Aviator' },
+                      { id: 'military', label: 'Military' },
+                      { id: 'racing', label: 'Racing' },
+                      { id: 'luxury', label: 'Luxury' },
+                      { id: 'smart', label: 'Smart' }
+                    ].map((style) => (
+                      <AeroButton
+                        key={style.id}
+                        variant={watchStyle === style.id ? 'red' : 'black'}
+                        className="px-3 py-1 text-xs"
+                        onClick={() => setWatchStyle(style.id as any)}
+                      >
+                        {style.label}
+                      </AeroButton>
+                    ))}
+                  </div>
+
                   <div className="relative group">
                     <div className="absolute -inset-10 bg-red-600/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                    <AeroWatch lang={lang} className="w-64 h-64 md:w-96 md:h-96 border-[12px] md:border-[16px]" />
+                    <AeroWatch style={watchStyle} lang={lang} className="w-64 h-64 md:w-96 md:h-96 border-[12px] md:border-[16px]" />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
@@ -7208,11 +7512,16 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
           <div className="w-1 h-8 bg-white/10 rounded-full" />
         </div>
       </div>
-      <WeatherModal 
-        isOpen={isWeatherModalOpen} 
-        onClose={() => setIsWeatherModalOpen(false)} 
-        t={t} 
-        lang={lang} 
+      <WeatherModal
+        isOpen={isWeatherModalOpen}
+        onClose={() => setIsWeatherModalOpen(false)}
+        t={t}
+        lang={lang}
+      />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLogin={handleLogin}
       />
     </div>
   );

@@ -1,0 +1,4 @@
+@echo off
+echo Starting AviationSort Python Server...
+python server.py
+pause
