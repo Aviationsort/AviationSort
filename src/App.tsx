@@ -169,54 +169,56 @@ interface ProfileData {
 const MOCK_FACTS = [
   "The world's oldest airline is KLM, established in 1919.",
   "The Boeing 747 is made up of six million parts.",
-  "A commercial aircraft flies at an average altitude of 35,000 feet.",
-  "The first female pilot was Raymonde de Laroche in 1910.",
-  "The world's busiest airport is Hartsfield-Jackson Atlanta International.",
-  "The wingspan of an Airbus A380 is 80 meters.",
-  "The Concorde could fly from London to New York in under 3 hours.",
-  "The Wright brothers' first flight lasted only 12 seconds.",
-  "The Lockheed SR-71 Blackbird is the fastest manned aircraft ever built.",
-  "A Boeing 747's fuel tank can hold up to 63,000 gallons.",
-  "The first non-stop solo flight across the Atlantic was by Charles Lindbergh.",
-  "The Antonov An-225 Mriya was the heaviest aircraft ever built.",
-  "The tires of a plane are designed to withstand 38 tons of pressure.",
-  "Only 5% of the world's population has ever been on a plane.",
-  "The white trails left by planes are called contrails.",
-  "The first jet engine was developed by Sir Frank Whittle.",
-  "The average speed of a commercial jet is 550-600 mph.",
-  "The world's shortest commercial flight is between Westray and Papa Westray.",
-  "The first flight attendants were required to be nurses.",
-  "The black box is actually bright orange.",
-  "The windows on a plane are round to prevent structural failure.",
-  "A plane can fly with only one engine.",
-  "The air on a plane is filtered by HEPA filters, similar to hospitals.",
-  "The first autopilot was invented in 1912.",
-  "The Boeing 777 was the first aircraft designed entirely on a computer.",
-  "The longest non-stop flight is Singapore to New York (18+ hours).",
-  "The first commercial jet was the de Havilland Comet.",
-  "The tail of a plane provides stability and control.",
-  "The Airbus A350 is made of 53% composite materials.",
-  "The first airport was built in Albany, New York, in 1908.",
-  "The sound of a jet engine can reach 140 decibels.",
-  "The first airmail service started in 1911.",
-  "The Boeing 787 Dreamliner is 20% more fuel-efficient than the 767.",
-  "The first helicopter was the VS-300, designed by Igor Sikorsky.",
-  "The largest passenger plane is the Airbus A380.",
-  "The first stealth aircraft was the Lockheed F-117 Nighthawk.",
-  "The average age of a commercial pilot is 44 years.",
-  "The first supersonic flight was by Chuck Yeager in 1947.",
-  "The Boeing 737 is the best-selling jet airliner in history.",
-  "The first air traffic control tower was at Croydon Airport in 1920.",
-  "The wings of a plane are flexible and can bend during flight.",
-  "The first transatlantic flight was in 1919 by a US Navy flying boat.",
-  "The Lockheed C-5 Galaxy is one of the largest military transport aircraft.",
-  "The first solar-powered plane to fly around the world was Solar Impulse 2.",
-  "The average lifespan of a commercial aircraft is 25-30 years.",
-  "The first unmanned aerial vehicle (UAV) was used in WWI.",
-  "The Boeing 727 was the first jet with three engines.",
-  "The first flight across the English Channel was by Louis Blériot.",
-  "The world's largest aircraft engine is the GE9X.",
-  "The first flight to the North Pole was in 1926."
+];
+
+const RSS_URLS = [
+  'https://www.aeroroutes.com/?format=rss',
+  'https://www.aero-news.net/news/rssCOMANW.xml',
+  'https://samchui.com/feed/',
+  'https://simpleflying.com/feed/',
+  'https://theaviationist.com/feed/',
+  'https://www.airlinereporter.com/feed/',
+  'https://avgeekery.com/feed/',
+  'https://australianaviation.com.au/feed/',
+  'https://feeds.feedburner.com/Ex-yuAviationNews',
+  'https://www.aviationbusinessnews.com/feed/',
+  'https://generalaviationnews.com/feed/',
+  'https://www.airbus.com/en/rss-all-feeds/15571?tid=15571&fid=29711'
+];
+
+const POLITICAL_RSS_URLS = [
+  'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
+  'https://www.cbc.ca/webfeed/rss/rss-politics',
+  'https://www.cbc.ca/webfeed/rss/rss-canada',
+  'https://www.cbc.ca/webfeed/rss/rss-world',
+  'https://www.lbcgroup.tv/Rss/News/en/8/lebanon-news',
+  'https://www.the961.com/feed/',
+  'https://rss.politico.com/politics-news.xml',
+  'https://apnews.com/politics.rss',
+  'https://www.bbc.com/news/politics',
+  'https://www.bloomberg.com/politics',
+  'https://www.nbcnews.com/politics',
+  'https://edition.cnn.com/politics',
+  'https://www.axios.com/politics-policy/',
+  'https://www.theatlantic.com/politics/',
+  'https://time.com/section/politics/',
+  'https://www.politicshome.com/news/rss',
+  'https://www.europarl.europa.eu/rss/doc/press-releases/en.xml',
+  'https://www.france24.com/en/europe/rss',
+  'https://feeds.feedburner.com/euronews/en/home/',
+  'https://brusselsmorning.com/feed/',
+  'https://feeds.thelocal.com/rss/es',
+  'https://feeds.feedburner.com/TheBalticTimesNews',
+  'https://www.albawaba.com/rss/all',
+  'https://www.middleeasteye.net/rss',
+  'https://www.scmp.com/rss/318198/feed/',
+  'https://www.scmp.com/rss/5/feed/',
+  'https://www.xinhuanet.com/english/rss/worldrss.xml',
+  'https://www.themoscowtimes.com/rss/news',
+  'http://government.ru/en/all/rss/',
+  'https://www.rt.com/rss/',
+  'https://ria.ru/export/rss2/index.xml?page_type=google_newsstand',
+  'https://notesfrompoland.com/feed/'
 ];
 
 // --- Components ---
@@ -523,7 +525,8 @@ const WeatherModal = ({ isOpen, onClose, t, lang }: { isOpen: boolean, onClose: 
   };
 
   const getWeatherIcon = (condition: string) => {
-    switch (condition.toLowerCase()) {
+    const safeCondition = condition?.toLowerCase() || '';
+    switch (safeCondition) {
       case 'clear': return <Sun className="w-12 h-12 text-yellow-400" />;
       case 'clouds': return <Cloud className="w-12 h-12 text-gray-400" />;
       case 'rain':
@@ -715,7 +718,7 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
         onLogin(username);
         onClose();
       } else {
-        setError(data.error || 'Authentication failed');
+        setError(data.message || data.error || 'Authentication failed');
       }
     } catch (err) {
       setError('Network error');
@@ -941,7 +944,11 @@ const TRANSLATIONS = {
     date: "Date",
     locationLabel: "Location",
     resetRadar: "Reset Radar",
-    politicalNews: "Political News"
+    worldNews: "World News",
+    loadingSources: "Loading Sources",
+    fetchingLatest: "Fetching latest world news...",
+    articlesLoaded: "articles loaded from sources",
+    rssEnglishOnly: "RSS feeds are only available in English"
   },
   fr: {
     dashboard: "Tableau de bord",
@@ -1079,7 +1086,11 @@ const TRANSLATIONS = {
     date: "Date",
     locationLabel: "Emplacement",
     resetRadar: "Réinitialiser le radar",
-    politicalNews: "Actualités Politiques"
+    worldNews: "Actualités Politiques",
+    loadingSources: "Chargement des sources",
+    fetchingLatest: "Récupération des dernières actualités...",
+    articlesLoaded: "articles chargés depuis les sources",
+    rssEnglishOnly: "Les flux RSS sont uniquement disponibles en anglais"
   },
   nl: {
     dashboard: "Dashboard",
@@ -1342,7 +1353,12 @@ const TRANSLATIONS = {
     close: "E2fel",
     date: "Tareekh",
     locationLabel: "Makan",
-    resetRadar: "Reset el-radar"
+    resetRadar: "Reset el-radar",
+    worldNews: "Akhbar",
+    loadingSources: "Ryadel el-masader",
+    fetchingLatest: "Gayeb el-akhbar el-akhir...",
+    articlesLoaded: "maqal mashrooh men el-masader",
+    rssEnglishOnly: "el-RSS mafrood ykon English bas"
   },
   de: {
     dashboard: "Dashboard",
@@ -1469,7 +1485,12 @@ const TRANSLATIONS = {
     close: "Schließen",
     date: "Datum",
     locationLabel: "Ort",
-    resetRadar: "Radar zurücksetzen"
+    resetRadar: "Radar zurücksetzen",
+    worldNews: "Weltnachrichten",
+    loadingSources: "Quellen werden geladen",
+    fetchingLatest: "Neueste Nachrichten werden abgerufen...",
+    articlesLoaded: "Artikel aus Quellen geladen",
+    rssEnglishOnly: "RSS-Feeds sind nur auf Englisch verfügbar"
   },
   it: {
     dashboard: "Dashboard",
@@ -2612,7 +2633,12 @@ const TRANSLATIONS = {
     close: "Cerrar",
     date: "Fecha",
     locationLabel: "Ubicación",
-    resetRadar: "Reiniciar Radar"
+    resetRadar: "Reiniciar Radar",
+    worldNews: "Noticias del Mundo",
+    loadingSources: "Cargando Fuentes",
+    fetchingLatest: "Obteniendo las últimas noticias...",
+    articlesLoaded: "artículos cargados de fuentes",
+    rssEnglishOnly: "Los feeds RSS solo están disponibles en inglés"
   },
   pt: {
     dashboard: "Painel",
@@ -2991,7 +3017,12 @@ const TRANSLATIONS = {
     close: "Закрыть",
     date: "Дата",
     locationLabel: "Местоположение",
-    resetRadar: "Сбросить радар"
+    resetRadar: "Сбросить радар",
+    worldNews: "Мировые новости",
+    loadingSources: "Загрузка источников",
+    fetchingLatest: "Получение последних новостей...",
+    articlesLoaded: "статей загружено из источников",
+    rssEnglishOnly: "RSS-ленты доступны только на английском"
   },
   mo: {
     dashboard: "Tabulu d'u bordu",
@@ -4789,7 +4820,7 @@ const TRANSLATIONS = {
   }
 };
 
-const AeroWatch = ({ className, lang = 'en', style = 'analog' }: { className?: string, lang?: string, style?: 'analog' | 'chronograph' | 'digital' | 'aviator' | 'military' | 'racing' | 'luxury' | 'smart' }) => {
+const AeroWatch = ({ className, lang = 'en', style = 'analog', background = null }: { className?: string, lang?: string, style?: 'analog' | 'chronograph' | 'digital' | 'aviator' | 'military' | 'racing' | 'luxury' | 'smart', background?: string | null }) => {
   const [time, setTime] = useState(new Date());
   const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
 
@@ -4806,9 +4837,20 @@ const AeroWatch = ({ className, lang = 'en', style = 'analog' }: { className?: s
   const utcMinutes = utcTime.getMinutes();
 
   if (style === 'digital') {
+    const isVideo = background?.startsWith('blob:') || background?.endsWith('.mp4') || background?.endsWith('.webm');
     return (
       <div className={cn("relative w-64 h-32 md:w-96 md:h-48 bg-black border-[6px] md:border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9)] flex items-center justify-center overflow-hidden", className)}>
-        <div className="text-center space-y-2">
+        {background && (
+          <div className="absolute inset-0">
+            {isVideo ? (
+              <video src={background} className="w-full h-full object-cover opacity-30" autoPlay loop muted />
+            ) : (
+              <img src={background} className="w-full h-full object-cover opacity-30" alt="background" />
+            )}
+            <div className="absolute inset-0 bg-black/50" />
+          </div>
+        )}
+        <div className="relative z-10 text-center space-y-2">
           <div className="text-2xl md:text-4xl font-mono font-bold text-green-400">
             {hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
           </div>
@@ -5078,7 +5120,7 @@ export default function App() {
   const [reelHashtags, setReelHashtags] = useState<string[]>(['lhr', 'a380']);
   const [newHashtag, setNewHashtag] = useState('');
   const [currentFileName, setCurrentFileName] = useState<string>('');
-  const [lang, setLang] = useState<'en' | 'fr' | 'ar'>('en');
+  const [lang, setLang] = useState<'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es'>('en');
   const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
 
   // Profile State
@@ -5094,9 +5136,61 @@ export default function App() {
 
   // RSS Pagination State
   const [newsPage, setNewsPage] = useState(1);
+  const [aviationPage, setAviationPage] = useState(1);
+  const [worldPage, setWorldPage] = useState(1);
   const [newsPerPage, setNewsPerPage] = useState(10);
-  const [newsTab, setNewsTab] = useState<'aviation' | 'political'>('aviation');
+  const [newsTab, setNewsTab] = useState<'aviation' | 'world' | 'status'>('aviation');
+  const [worldNews, setPoliticalNews] = useState<NewsItem[]>([]);
+  const [worldSources, setPoliticalSources] = useState<NewsSource[]>([]);
+  const [worldNewsLoading, setWorldNewsLoading] = useState(false);
+  const [worldNewsProgress, setWorldNewsProgress] = useState(0);
+  const [aviationSources, setAviationSources] = useState<NewsSource[]>([]);
+  const [feedStatus, setFeedStatus] = useState<{url: string, status: 'loading' | 'success' | 'failed', message: string, time: string}[]>([]);
   const [watchStyle, setWatchStyle] = useState<'analog' | 'chronograph' | 'digital' | 'aviator' | 'military' | 'racing' | 'luxury' | 'smart'>('analog');
+  const [watchBackground, setWatchBackground] = useState<string | null>(null);
+  const watchBgInputRef = useRef<HTMLInputElement>(null);
+  const [clockMode, setClockMode] = useState<'clock' | 'stopwatch' | 'timer' | 'world'>('clock');
+  const [stopwatchRunning, setStopwatchRunning] = useState(false);
+  const [stopwatchTime, setStopwatchTime] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState(300);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerRemaining, setTimerRemaining] = useState(300);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const stopwatchRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (timerRunning && timerRemaining > 0) {
+      timerRef.current = setInterval(() => {
+        setTimerRemaining(prev => {
+          if (prev <= 1) {
+            setTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [timerRunning, timerRemaining]);
+
+  useEffect(() => {
+    if (stopwatchRunning) {
+      stopwatchRef.current = setInterval(() => {
+        setStopwatchTime(prev => prev + 0.01);
+      }, 10);
+    }
+    return () => {
+      if (stopwatchRef.current) clearInterval(stopwatchRef.current);
+    };
+  }, [stopwatchRunning]);
+  const [worldClocks, setWorldClocks] = useState([
+    { city: 'New York', timezone: 'America/New_York' },
+    { city: 'London', timezone: 'Europe/London' },
+    { city: 'Dubai', timezone: 'Asia/Dubai' },
+    { city: 'Tokyo', timezone: 'Asia/Tokyo' }
+  ]);
 
   // SkyChat Matching State
   const [showMatching, setShowMatching] = useState(false);
@@ -5217,6 +5311,15 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const startTime = new Date().toLocaleTimeString();
+        
+        // Initialize feed status
+        const initStatus = [
+          ...(RSS_URLS || []).map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime })),
+          ...(POLITICAL_RSS_URLS || []).map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime }))
+        ];
+        setFeedStatus(initStatus);
+        
         const [photosRes, newsRes, storiesRes, friendsRes, requestsRes] = await Promise.all([
           fetch('/api/photos'),
           fetch('/api/news'),
@@ -5231,7 +5334,15 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
         const friendsData = await friendsRes.json();
         const requestsData = await requestsRes.json();
 
-        setPhotos(photosData);
+        setPhotos(photosData.map((p: any) => ({
+          id: p.id,
+          url: p.url,
+          registration: p.aircraft || 'Unknown',
+          airline: p.airline || 'Unknown',
+          aircraftType: p.aircraft || 'Unknown',
+          date: new Date().toLocaleDateString(),
+          isFavorite: false
+        })));
         
         if (newsData.articles) {
           setNews(newsData.articles.map((a: any, i: number) => ({
@@ -5243,6 +5354,26 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             source: a.source
           })));
           setNewsSources(newsData.sources || []);
+          
+          // Update feed status with aviation sources
+          if (newsData.sources) {
+            setAviationSources(newsData.sources);
+            setFeedStatus(prev => {
+              const updated = [...prev];
+              newsData.sources.forEach((s: any) => {
+                const idx = updated.findIndex(f => f.url === s.url);
+                if (idx >= 0) {
+                  updated[idx] = {
+                    url: s.url,
+                    status: s.status === 'working' ? 'success' : 'failed',
+                    message: s.status === 'working' ? `Fetched ${newsData.articles?.filter((a: any) => a.source === s.name).length || 0} articles` : s.status,
+                    time: new Date().toLocaleTimeString()
+                  };
+                }
+              });
+              return updated;
+            });
+          }
         } else {
           setNews(newsData);
         }
@@ -5250,6 +5381,71 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
         setStories(storiesData);
         setFriends(friendsData);
         setRequests(requestsData);
+
+        // Fetch Political/World News with real-time progress
+        try {
+          setWorldNewsLoading(true);
+          setWorldNewsProgress(0);
+          
+          const eventSource = new EventSource('/api/news/world/stream');
+          
+          eventSource.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.type === 'start') {
+                setWorldNewsProgress(0);
+              } else if (data.type === 'progress') {
+                setWorldNewsProgress(data.progress);
+                // Update feed status with source info
+                if (data.source && data.success !== undefined) {
+                  setFeedStatus(prev => {
+                    const sourceUrl = POLITICAL_RSS_URLS.find((url: string) => url.includes(data.source?.toLowerCase().replace(/\s/g, ''))) || '';
+                    if (!sourceUrl) return prev;
+                    const updated = [...prev];
+                    const idx = updated.findIndex(f => f.url === sourceUrl);
+                    if (idx >= 0) {
+                      updated[idx] = {
+                        url: sourceUrl,
+                        status: data.success ? 'success' : 'failed',
+                        message: data.success ? `Fetched ${data.itemsCount} articles` : 'Failed',
+                        time: new Date().toLocaleTimeString()
+                      };
+                    }
+                    return updated;
+                  });
+                }
+              } else if (data.type === 'complete') {
+                setWorldNewsProgress(100);
+                setWorldNewsLoading(false);
+                
+                if (data.articles) {
+                  setPoliticalNews(data.articles.map((a: any, i: number) => ({
+                    id: String(i),
+                    title: a.title,
+                    summary: a.contentSnippet || '',
+                    date: a.pubDate ? new Date(a.pubDate).toLocaleDateString() : 'Recent',
+                    url: a.link,
+                    source: a.source
+                  })));
+                  setPoliticalSources(data.sources || []);
+                }
+                eventSource.close();
+              } else if (data.type === 'error') {
+                console.error('Stream error:', data.error);
+              }
+            } catch (err) {
+              console.error('Failed to parse SSE data:', err);
+            }
+          };
+          
+          eventSource.onerror = () => {
+            setWorldNewsLoading(false);
+            eventSource.close();
+          };
+        } catch (err) {
+          console.error("Failed to fetch political news:", err);
+        }
 
         // Fetch Weather (Open-Meteo)
         const weatherRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=51.4700&longitude=-0.4543&current_weather=true');
@@ -5299,24 +5495,25 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
   // Reels Logic
   const reelsPhotos = useMemo(() => {
     if (reelHashtags.length === 0) {
-      return [...photos].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      return [...photos].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
     }
     
     return photos
       .map(p => {
-        const matches = p.hashtags?.filter(tag => reelHashtags.includes(tag.toLowerCase())).length || 0;
+        const matches = (p.hashtags || []).filter((tag: string) => tag && reelHashtags.includes(tag.toLowerCase())).length || 0;
         return { ...p, score: matches };
       })
       .filter(p => p.score > 0)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
+        return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
       });
   }, [photos, reelHashtags]);
 
   const addHashtag = () => {
-    if (newHashtag.trim() && !reelHashtags.includes(newHashtag.toLowerCase())) {
-      setReelHashtags(prev => [...prev, newHashtag.toLowerCase().trim()]);
+    const trimmed = newHashtag?.trim() || '';
+    if (trimmed && !reelHashtags.includes(trimmed.toLowerCase())) {
+      setReelHashtags(prev => [...prev, trimmed.toLowerCase()]);
       setNewHashtag('');
     }
   };
@@ -5403,10 +5600,11 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
 
   const filteredPhotos = useMemo(() => {
+    const safeSearch = searchQuery?.toLowerCase() || '';
     const filtered = photos.filter(p => 
-      p.registration.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.airline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.aircraftType.toLowerCase().includes(searchQuery.toLowerCase())
+      (p.registration || '').toLowerCase().includes(safeSearch) ||
+      (p.airline || '').toLowerCase().includes(safeSearch) ||
+      (p.aircraftType || '').toLowerCase().includes(safeSearch)
     );
 
     return [...filtered].sort((a, b) => {
@@ -5427,10 +5625,11 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
   const totalPages = Math.ceil(filteredPhotos.length / itemsPerPage);
 
   const paginatedFlexPics = useMemo(() => {
+    const safeSearch = searchQuery?.toLowerCase() || '';
     const filtered = flexPics.filter(p => 
-      p.registration.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.airline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.aircraftType.toLowerCase().includes(searchQuery.toLowerCase())
+      (p.registration || '').toLowerCase().includes(safeSearch) ||
+      (p.airline || '').toLowerCase().includes(safeSearch) ||
+      (p.aircraftType || '').toLowerCase().includes(safeSearch)
     );
 
     const sorted = [...filtered].sort((a, b) => {
@@ -5542,12 +5741,12 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
   const sendMessage = () => {
     if (!messageInput.trim() || !activeChat) return;
     
-    const newMessage = {
+const newMessage = {
       id: Date.now().toString(),
-      chatId: activeChat.id,
       senderId: 'me',
       text: messageInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isMe: true,
       isRead: true
     };
 
@@ -5697,11 +5896,11 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
             <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-between md:justify-end overflow-x-auto no-scrollbar">
               <button
-                onClick={() => setLang(lang === 'en' ? 'fr' : 'en')}
+                onClick={() => setLang(lang === 'en' ? 'fr' : lang === 'fr' ? 'arz' : lang === 'arz' ? 'de' : lang === 'de' ? 'ru' : lang === 'ru' ? 'es' : 'en')}
                 className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0 hover:bg-white/10 transition-colors"
               >
-                <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : '🇫🇷'}</span>
-                <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : 'FR'}</span>
+                <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : lang === 'fr' ? '🇫🇷' : lang === 'arz' ? '🇪🇬' : lang === 'de' ? '🇩🇪' : lang === 'ru' ? '🇷🇺' : '🇪🇸'}</span>
+                <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : lang === 'fr' ? 'FR' : lang === 'arz' ? 'ARZ' : lang === 'de' ? 'DE' : lang === 'ru' ? 'RU' : 'ES'}</span>
               </button>
             <div className="aero-window-controls shrink-0">
               <button className="aero-control-btn"><Minus className="w-4 h-4" /></button>
@@ -6162,7 +6361,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                   <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                     <div className="space-y-2">
                       <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">
-                        {newsTab === 'aviation' ? t.aviationNews : t.politicalNews}
+                        {newsTab === 'aviation' ? t.aviationNews : t.worldNews}
                       </h2>
                       <p className="text-xs text-white/40 font-bold uppercase tracking-widest">
                         {newsTab === 'aviation' ? t.newsCredit : 'Coming Soon'}
@@ -6195,22 +6394,97 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                     <AeroButton
                       variant={newsTab === 'aviation' ? 'red' : 'black'}
                       className="px-6 py-2"
-                      onClick={() => setNewsTab('aviation')}
+                      onClick={() => { setNewsTab('aviation'); setAviationPage(1); }}
                     >
                       Aviation News
                     </AeroButton>
                     <AeroButton
-                      variant={newsTab === 'political' ? 'red' : 'black'}
+                      variant={newsTab === 'world' ? 'red' : 'black'}
                       className="px-6 py-2"
-                      onClick={() => setNewsTab('political')}
+                      onClick={() => { setNewsTab('world'); setWorldPage(1); }}
                     >
-                      Political News
+                      World News
+                    </AeroButton>
+                    <AeroButton
+                      variant={newsTab === 'status' ? 'red' : 'black'}
+                      className="px-6 py-2"
+                      onClick={() => setNewsTab('status')}
+                    >
+                      Status
                     </AeroButton>
                   </div>
 
-                  <div className="space-y-4">
+                  <motion.div 
+                      layout 
+                      className="space-y-4"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                    {/* World News Progress Bar */}
+                    {newsTab === 'world' && (
+                      <motion.div 
+                        className="space-y-3 p-4 bg-blue-950/20 border border-blue-500/20 rounded-2xl"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }}
+                      >
+                        <div className="flex justify-between items-center text-xs">
+                          <motion.span 
+                            className="text-white/60 font-bold uppercase tracking-widest"
+                            layout
+                          >
+                            {t.loadingSources}
+                          </motion.span>
+                          <motion.span 
+                            className="text-blue-400 font-black"
+                            key={worldNewsProgress}
+                            initial={{ scale: 1.2 }}
+                            animate={{ scale: 1 }}
+                          >
+                            {worldNewsProgress}%
+                          </motion.span>
+                        </div>
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden relative">
+                          <motion.div 
+                            className="h-full bg-gradient-to-r from-blue-600 via-blue-400 to-blue-500 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${worldNewsProgress}%` }}
+                            transition={{ 
+                              type: "spring",
+                              stiffness: 60,
+                              damping: 15,
+                              mass: 0.5
+                            }}
+                          />
+                          <motion.div 
+                            className="absolute top-0 right-0 h-full w-2 bg-white/50 blur-sm"
+                            animate={{ opacity: worldNewsLoading ? [0, 1, 0] : 0 }}
+                            transition={{ duration: 1, repeat: Infinity }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <motion.span 
+                            className="text-[10px] text-white/30 font-medium"
+                            key={worldNewsLoading ? 'loading' : 'loaded'}
+                            initial={{ opacity: 0.5 }}
+                            animate={{ opacity: 1 }}
+                          >
+                            {worldNewsLoading ? t.fetchingLatest : `${worldNews.length} ${t.articlesLoaded}`}
+                          </motion.span>
+                          <motion.span 
+                            className="text-[9px] text-amber-400/70 font-medium bg-amber-500/10 px-2 py-0.5 rounded"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                          >
+                            {t.rssEnglishOnly}
+                          </motion.span>
+                        </div>
+                      </motion.div>
+                    )}
+                    
                     {newsTab === 'aviation' ? (
-                      news.slice((newsPage - 1) * newsPerPage, newsPage * newsPerPage).map(item => (
+                      news.slice((aviationPage - 1) * newsPerPage, aviationPage * newsPerPage).map(item => (
                       <GlassCard 
                         key={item.id} 
                         className="hover:border-red-500/30 transition-colors group cursor-pointer"
@@ -6239,36 +6513,120 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                       </GlassCard>
                       ))
                     ) : (
-                      <div className="flex flex-col items-center justify-center py-20 gap-6">
-                        <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shadow-inner">
-                          <Newspaper className="w-12 h-12 text-white/20" />
+                      worldNews.length > 0 ? (
+                        worldNews.slice((worldPage - 1) * newsPerPage, worldPage * newsPerPage).map(item => (
+                        <GlassCard 
+                          key={item.id} 
+                          className="hover:border-blue-500/30 transition-colors group cursor-pointer"
+                          onClick={() => window.open(item.url, '_blank')}
+                        >
+                          <div className="flex flex-col md:flex-row gap-6">
+                            <div className="w-full md:w-48 h-32 rounded-xl overflow-hidden bg-blue-900/20 flex items-center justify-center border border-white/5 relative">
+                              <Newspaper className="w-12 h-12 text-blue-500/40 group-hover:scale-110 transition-transform" />
+                              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[8px] font-black text-white/60 uppercase tracking-widest">
+                                {item.source}
+                              </div>
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{item.date}</span>
+                                <Globe className="w-4 h-4 text-white/20" />
+                              </div>
+                              <h3 className="text-xl font-bold group-hover:text-blue-500 transition-colors">{item.title}</h3>
+                              <p className="text-sm text-white/60 line-clamp-2">{item.summary}</p>
+                              <div className="pt-2 flex items-center justify-between">
+                                <AeroButton variant="black" className="text-[10px] px-4 py-1">{t.readFull}</AeroButton>
+                                <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">{t.source}: {item.source}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </GlassCard>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-20 gap-6">
+                          <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shadow-inner">
+                            <Newspaper className="w-12 h-12 text-white/20" />
+                          </div>
+                          <div className="text-center space-y-2">
+                            <h3 className="text-xl font-black italic uppercase glossy-text">No World News Today</h3>
+                            <p className="text-sm text-white/40 max-w-xs">No news from the last 24 hours found.</p>
+                          </div>
                         </div>
-                        <div className="text-center space-y-2">
-                          <h3 className="text-xl font-black italic uppercase glossy-text">Coming Soon</h3>
-                          <p className="text-sm text-white/40 max-w-xs">Political news feeds will be available in a future update.</p>
-                        </div>
-                      </div>
+                      )
                     )}
-                  </div>
+                    
+                    {/* Status Tab */}
+                    {newsTab === 'status' && (
+                      <motion.div 
+                        className="space-y-4"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <h3 className="text-2xl font-black italic uppercase glossy-text">
+                          {t.status}
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {feedStatus.slice(-30).map((feed, idx) => (
+                            <GlassCard 
+                              key={idx} 
+                              className={`p-3 border ${feed.status === 'success' ? 'border-green-500/20 bg-green-950/10' : feed.status === 'failed' ? 'border-red-500/20 bg-red-950/10' : 'border-yellow-500/20 bg-yellow-950/10'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${feed.status === 'success' ? 'bg-green-500' : feed.status === 'failed' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500 animate-pulse'}`} />
+                                <span className="text-xs font-bold truncate flex-1">{feed.url.split('//')[1]?.split('/')[0] || feed.url}</span>
+                              </div>
+                              <p className="text-[10px] text-white/50 mt-1">{feed.message}</p>
+                              <span className="text-[8px] text-white/30">{feed.time}</span>
+                            </GlassCard>
+                          ))}
+                        </div>
+                      </motion.div>
+)}
+                    </motion.div>
 
                   {newsTab === 'aviation' && Math.ceil(news.length / newsPerPage) > 1 && (
                     <div className="flex items-center justify-center gap-4 pt-8">
                       <AeroButton 
                         variant="black" 
                         className="px-4 py-2" 
-                        onClick={() => setNewsPage(prev => Math.max(1, prev - 1))}
-                        disabled={newsPage === 1}
+                        onClick={() => setAviationPage(prev => Math.max(1, prev - 1))}
+                        disabled={aviationPage === 1}
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </AeroButton>
                       <span className="text-xs font-black italic text-white/40 uppercase tracking-widest">
-                        Page {newsPage} of {Math.ceil(news.length / newsPerPage)}
+                        Page {aviationPage} of {Math.ceil(news.length / newsPerPage)}
                       </span>
                       <AeroButton 
                         variant="black" 
                         className="px-4 py-2" 
-                        onClick={() => setNewsPage(prev => Math.min(Math.ceil(news.length / newsPerPage), prev + 1))}
-                        disabled={newsPage === Math.ceil(news.length / newsPerPage)}
+                        onClick={() => setAviationPage(prev => Math.min(Math.ceil(news.length / newsPerPage), prev + 1))}
+                        disabled={aviationPage === Math.ceil(news.length / newsPerPage)}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </AeroButton>
+                    </div>
+                  )}
+
+                  {newsTab === 'world' && worldNews.length > 0 && Math.ceil(worldNews.length / newsPerPage) > 1 && (
+                    <div className="flex items-center justify-center gap-4 pt-8">
+                      <AeroButton 
+                        variant="black" 
+                        className="px-4 py-2" 
+                        onClick={() => setWorldPage(prev => Math.max(1, prev - 1))}
+                        disabled={worldPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </AeroButton>
+                      <span className="text-xs font-black italic text-white/40 uppercase tracking-widest">
+                        Page {worldPage} of {Math.ceil(worldNews.length / newsPerPage)}
+                      </span>
+                      <AeroButton 
+                        variant="black" 
+                        className="px-4 py-2" 
+                        onClick={() => setWorldPage(prev => Math.min(Math.ceil(worldNews.length / newsPerPage), prev + 1))}
+                        disabled={worldPage === Math.ceil(worldNews.length / newsPerPage)}
                       >
                         <ChevronRight className="w-4 h-4" />
                       </AeroButton>
@@ -7041,54 +7399,220 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="h-full flex flex-col items-center justify-center gap-12"
+                  className="h-full flex flex-col items-center justify-center gap-8 overflow-auto py-4"
                 >
-                  <div className="text-center space-y-4">
-                    <h2 className="text-5xl font-black italic glossy-text uppercase tracking-tighter">{t.clock}</h2>
+                  <div className="text-center space-y-2">
+                    <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">{t.clock}</h2>
                     <p className="text-white/40 font-bold uppercase tracking-[0.4em]">{t.aeroTime}</p>
                   </div>
 
-                  <div className="flex flex-wrap justify-center gap-2 mb-8">
+                  <div className="flex flex-wrap justify-center gap-2 mb-2">
                     {[
-                      { id: 'analog', label: 'Analog' },
-                      { id: 'chronograph', label: 'Chronograph' },
-                      { id: 'digital', label: 'Digital' },
-                      { id: 'aviator', label: 'Aviator' },
-                      { id: 'military', label: 'Military' },
-                      { id: 'racing', label: 'Racing' },
-                      { id: 'luxury', label: 'Luxury' },
-                      { id: 'smart', label: 'Smart' }
-                    ].map((style) => (
+                      { id: 'clock', label: 'Clock' },
+                      { id: 'stopwatch', label: 'Stopwatch' },
+                      { id: 'timer', label: 'Timer' },
+                      { id: 'world', label: 'World Clock' }
+                    ].map((mode) => (
                       <AeroButton
-                        key={style.id}
-                        variant={watchStyle === style.id ? 'red' : 'black'}
-                        className="px-3 py-1 text-xs"
-                        onClick={() => setWatchStyle(style.id as any)}
+                        key={mode.id}
+                        variant={clockMode === mode.id ? 'red' : 'black'}
+                        className="px-4 py-2 text-xs"
+                        onClick={() => setClockMode(mode.id as any)}
                       >
-                        {style.label}
+                        {mode.label}
                       </AeroButton>
                     ))}
                   </div>
 
-                  <div className="relative group">
-                    <div className="absolute -inset-10 bg-red-600/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                    <AeroWatch style={watchStyle} lang={lang} className="w-64 h-64 md:w-96 md:h-96 border-[12px] md:border-[16px]" />
-                  </div>
+                  {clockMode === 'clock' && (
+                    <>
+                      <div className="flex flex-wrap justify-center gap-2 mb-4">
+                        {[
+                          { id: 'analog', label: 'Analog' },
+                          { id: 'digital', label: 'Digital' }
+                        ].map((style) => (
+                          <AeroButton
+                            key={style.id}
+                            variant={watchStyle === style.id ? 'red' : 'black'}
+                            className="px-3 py-1 text-xs"
+                            onClick={() => setWatchStyle(style.id as any)}
+                          >
+                            {style.label}
+                          </AeroButton>
+                        ))}
+                        {watchStyle === 'digital' && (
+                          <>
+                            <input
+                              ref={watchBgInputRef}
+                              type="file"
+                              accept="image/*,video/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  setWatchBackground(url);
+                                }
+                              }}
+                            />
+                            <AeroButton
+                              variant={watchBackground ? 'red' : 'black'}
+                              className="px-3 py-1 text-xs"
+                              onClick={() => watchBgInputRef.current?.click()}
+                            >
+                              {watchBackground ? 'Change BG' : 'Add BG'}
+                            </AeroButton>
+                            {watchBackground && (
+                              <AeroButton
+                                variant="grey"
+                                className="px-3 py-1 text-xs"
+                                onClick={() => {
+                                  setWatchBackground(null);
+                                }}
+                              >
+                                Remove
+                              </AeroButton>
+                            )}
+                          </>
+                        )}
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
-                    <GlassCard className="text-center space-y-2">
-                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Local Time</p>
-                      <p className="text-2xl font-black italic">{new Date().toLocaleTimeString()}</p>
-                    </GlassCard>
-                    <GlassCard className="text-center space-y-2">
-                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">UTC / Zulu</p>
-                      <p className="text-2xl font-black italic">{new Date().toISOString().slice(11, 19)}</p>
-                    </GlassCard>
-                    <GlassCard className="text-center space-y-2">
-                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Timezone</p>
-                      <p className="text-2xl font-black italic">{Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
-                    </GlassCard>
-                  </div>
+                      <div className="relative group">
+                        <div className="absolute -inset-10 bg-red-600/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                        <AeroWatch style={watchStyle} lang={lang} background={watchBackground} className="w-56 h-56 md:w-80 md:h-80 border-[10px] md:border-[14px]" />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl">
+                        <GlassCard className="text-center space-y-1">
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Local</p>
+                          <p className="text-xl font-black italic">{new Date().toLocaleTimeString()}</p>
+                        </GlassCard>
+                        <GlassCard className="text-center space-y-1">
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">UTC / Zulu</p>
+                          <p className="text-xl font-black italic">{new Date().toISOString().slice(11, 19)}</p>
+                        </GlassCard>
+                        <GlassCard className="text-center space-y-1">
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Timezone</p>
+                          <p className="text-xl font-black italic">{Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+                        </GlassCard>
+                      </div>
+                    </>
+                  )}
+
+                  {clockMode === 'stopwatch' && (
+                    <div className="flex flex-col items-center gap-8 w-full max-w-md">
+                      <div className="w-64 h-64 rounded-full bg-black border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9)] flex items-center justify-center relative">
+                        <div className="text-center">
+                          <div className="text-4xl md:text-5xl font-mono font-bold text-red-500">
+                            {Math.floor(stopwatchTime / 60).toString().padStart(2, '0')}:{(stopwatchTime % 60).toString().padStart(2, '0')}
+                          </div>
+                          <div className="text-lg font-mono text-red-500/60">
+                            .{Math.floor((stopwatchTime % 1) * 100).toString().padStart(2, '0')}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <AeroButton
+                          variant={stopwatchRunning ? 'red' : 'grey'}
+                          className="w-24"
+                          onClick={() => {
+                            if (stopwatchRunning) {
+                              setStopwatchRunning(false);
+                            } else {
+                              setStopwatchRunning(true);
+                            }
+                          }}
+                        >
+                          {stopwatchRunning ? 'Stop' : 'Start'}
+                        </AeroButton>
+                        <AeroButton
+                          variant="black"
+                          className="w-24"
+                          onClick={() => {
+                            setStopwatchTime(0);
+                            setStopwatchRunning(false);
+                          }}
+                        >
+                          Reset
+                        </AeroButton>
+                      </div>
+                      {stopwatchRunning && (
+                        <GlassCard className="w-full text-center">
+                          <p className="text-xs text-white/40">Running...</p>
+                        </GlassCard>
+                      )}
+                    </div>
+                  )}
+
+                  {clockMode === 'timer' && (
+                    <div className="flex flex-col items-center gap-8 w-full max-w-md">
+                      <div className="w-64 h-64 rounded-full bg-black border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9)] flex items-center justify-center relative">
+                        <div className="text-center">
+                          <div className="text-4xl md:text-5xl font-mono font-bold text-red-500">
+                            {Math.floor(timerRemaining / 60).toString().padStart(2, '0')}:{(timerRemaining % 60).toString().padStart(2, '0')}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-center">
+                        {[60, 120, 300, 600, 900, 1800].map((sec) => (
+                          <AeroButton
+                            key={sec}
+                            variant={timerRemaining === sec && !timerRunning ? 'red' : 'black'}
+                            className="px-3 py-1 text-xs"
+                            onClick={() => {
+                              setTimerRemaining(sec);
+                              setTimerSeconds(sec);
+                              setTimerRunning(false);
+                            }}
+                          >
+                            {sec < 60 ? `${sec}s` : `${sec / 60}m`}
+                          </AeroButton>
+                        ))}
+                      </div>
+                      <div className="flex gap-4">
+                        <AeroButton
+                          variant={timerRunning ? 'red' : 'grey'}
+                          className="w-24"
+                          onClick={() => setTimerRunning(!timerRunning)}
+                        >
+                          {timerRunning ? 'Pause' : 'Start'}
+                        </AeroButton>
+                        <AeroButton
+                          variant="black"
+                          className="w-24"
+                          onClick={() => {
+                            setTimerRemaining(timerSeconds);
+                            setTimerRunning(false);
+                          }}
+                        >
+                          Reset
+                        </AeroButton>
+                      </div>
+                    </div>
+                  )}
+
+                  {clockMode === 'world' && (
+                    <div className="flex flex-col items-center gap-6 w-full max-w-3xl">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                        {worldClocks.map((clock, idx) => (
+                          <GlassCard key={idx} className="flex justify-between items-center">
+                            <div className="text-center">
+                              <p className="text-xs font-black text-red-500 uppercase tracking-widest">{clock.city}</p>
+                              <p className="text-xs text-white/40">{clock.timezone}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black italic">
+                                {new Date().toLocaleTimeString('en-US', { timeZone: clock.timezone, hour: '2-digit', minute: '2-digit', hour12: false })}
+                              </p>
+                              <p className="text-[10px] text-white/40">
+                                {new Date().toLocaleDateString('en-US', { timeZone: clock.timezone, weekday: 'short' })}
+                              </p>
+                            </div>
+                          </GlassCard>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -7214,7 +7738,7 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
               <div className="bg-white p-6 rounded-[2.5rem] shadow-[inset_0_4px_10px_rgba(0,0,0,0.2)] flex justify-center">
                 <QRCodeSVG 
-                  value={`https://aviationsort.web/profile/${profile.displayName.toLowerCase().replace(/\s+/g, '-')}`} 
+                  value={`https://aviationsort.web/profile/${(profile.displayName || '').toLowerCase().replace(/\s+/g, '-')}`} 
                   size={200} 
                   level="H"
                   includeMargin={true}
