@@ -59,7 +59,9 @@ import {
   MapPin,
   Droplets,
   Thermometer,
-  LogOut
+  LogOut,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { 
@@ -6405,83 +6407,31 @@ const newMessage = {
                     >
                       World News
                     </AeroButton>
-                    <AeroButton
-                      variant={newsTab === 'status' ? 'red' : 'black'}
-                      className="px-6 py-2"
-                      onClick={() => setNewsTab('status')}
-                    >
-                      Status
-                    </AeroButton>
                   </div>
 
-                  <motion.div 
-                      layout 
-                      className="space-y-4"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                    {/* World News Progress Bar */}
-                    {newsTab === 'world' && (
-                      <motion.div 
-                        className="space-y-3 p-4 bg-blue-950/20 border border-blue-500/20 rounded-2xl"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                      >
-                        <div className="flex justify-between items-center text-xs">
-                          <motion.span 
-                            className="text-white/60 font-bold uppercase tracking-widest"
-                            layout
-                          >
-                            {t.loadingSources}
-                          </motion.span>
-                          <motion.span 
-                            className="text-blue-400 font-black"
-                            key={worldNewsProgress}
-                            initial={{ scale: 1.2 }}
-                            animate={{ scale: 1 }}
-                          >
-                            {worldNewsProgress}%
-                          </motion.span>
-                        </div>
-                        <div className="h-3 bg-white/10 rounded-full overflow-hidden relative">
-                          <motion.div 
-                            className="h-full bg-gradient-to-r from-blue-600 via-blue-400 to-blue-500 rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${worldNewsProgress}%` }}
-                            transition={{ 
-                              type: "spring",
-                              stiffness: 60,
-                              damping: 15,
-                              mass: 0.5
-                            }}
-                          />
-                          <motion.div 
-                            className="absolute top-0 right-0 h-full w-2 bg-white/50 blur-sm"
-                            animate={{ opacity: worldNewsLoading ? [0, 1, 0] : 0 }}
-                            transition={{ duration: 1, repeat: Infinity }}
-                          />
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <motion.span 
-                            className="text-[10px] text-white/30 font-medium"
-                            key={worldNewsLoading ? 'loading' : 'loaded'}
-                            initial={{ opacity: 0.5 }}
-                            animate={{ opacity: 1 }}
-                          >
-                            {worldNewsLoading ? t.fetchingLatest : `${worldNews.length} ${t.articlesLoaded}`}
-                          </motion.span>
-                          <motion.span 
-                            className="text-[9px] text-amber-400/70 font-medium bg-amber-500/10 px-2 py-0.5 rounded"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                          >
-                            {t.rssEnglishOnly}
-                          </motion.span>
-                        </div>
-                      </motion.div>
+<div className="space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] scroll-smooth [-webkit-overflow-scrolling:touch]">
+                    {/* World News Progress - Simplified Frutiger Aero */}
+                    {newsTab === 'world' && worldNewsLoading && (
+                      <div className="flex items-center gap-3 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
+                        <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                        <span className="text-sm text-white/70">{t.fetchingLatest}</span>
+                        <span className="ml-auto text-sm font-bold text-blue-400">{worldNewsProgress}%</span>
+                      </div>
                     )}
+                    {newsTab === 'world' && !worldNewsLoading && worldNews.length > 0 && (
+                      <div className="px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-white/70">{worldNews.length} {t.articlesLoaded}</span>
+                        <span className="ml-auto text-[10px] text-amber-400">{t.rssEnglishOnly}</span>
+                      </div>
+                    )}
+                    {newsTab === 'world' && !worldNewsLoading && worldNews.length === 0 && (
+                      <div className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-full flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-500" />
+                        <span className="text-sm text-white/70">No articles found</span>
+                      </div>
+                    )}
+                    </div>
                     
                     {newsTab === 'aviation' ? (
                       news.slice((aviationPage - 1) * newsPerPage, aviationPage * newsPerPage).map(item => (
@@ -6553,37 +6503,7 @@ const newMessage = {
                           </div>
                         </div>
                       )
-                    )}
-                    
-                    {/* Status Tab */}
-                    {newsTab === 'status' && (
-                      <motion.div 
-                        className="space-y-4"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <h3 className="text-2xl font-black italic uppercase glossy-text">
-                          {t.status}
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {feedStatus.slice(-30).map((feed, idx) => (
-                            <GlassCard 
-                              key={idx} 
-                              className={`p-3 border ${feed.status === 'success' ? 'border-green-500/20 bg-green-950/10' : feed.status === 'failed' ? 'border-red-500/20 bg-red-950/10' : 'border-yellow-500/20 bg-yellow-950/10'}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${feed.status === 'success' ? 'bg-green-500' : feed.status === 'failed' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500 animate-pulse'}`} />
-                                <span className="text-xs font-bold truncate flex-1">{feed.url.split('//')[1]?.split('/')[0] || feed.url}</span>
-                              </div>
-                              <p className="text-[10px] text-white/50 mt-1">{feed.message}</p>
-                              <span className="text-[8px] text-white/30">{feed.time}</span>
-                            </GlassCard>
-                          ))}
-                        </div>
-                      </motion.div>
 )}
-                    </motion.div>
 
                   {newsTab === 'aviation' && Math.ceil(news.length / newsPerPage) > 1 && (
                     <div className="flex items-center justify-center gap-4 pt-8">
