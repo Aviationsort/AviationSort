@@ -93,20 +93,29 @@ def cors_proxy():
     USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     
     try:
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+        
+        https_handler = urllib.request.HTTPSHandler(context=ctx)
+        opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler, https_handler)
+        
+        referer = 'https://www.google.com/'
+        if 'lbcgroup.tv' in url:
+            referer = 'https://www.lbcgroup.tv/'
+        
         req = urllib.request.Request(url, headers={
             'User-Agent': USER_AGENT,
             'Accept': 'application/rss+xml, application/xml, text/xml, text/html, */*',
             'Accept-Encoding': 'gzip, deflate',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
+            'Connection': 'keep-alive',
+            'Referer': referer
         })
         
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        
-        response = urllib.request.urlopen(req, timeout=15, context=ctx)
+        response = opener.open(req, timeout=15)
         content = response.read()
         
         if response.info().get('Content-Encoding') == 'gzip':
@@ -159,23 +168,27 @@ def cors_proxy_batch():
         USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         
         try:
-            # Check cache
-            cached = proxy_cache.get(url)
-            if cached:
-                return url, cached, None
-            
-            req = urllib.request.Request(url, headers={
-                'User-Agent': USER_AGENT,
-                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-                'Accept-Encoding': 'gzip, deflate'
-            })
-            
             import ssl
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
+            ctx.set_ciphers('DEFAULT@SECLEVEL=1')
             
-            resp = urllib.request.urlopen(req, timeout=12, context=ctx)
+            https_handler = urllib.request.HTTPSHandler(context=ctx)
+            opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler, https_handler)
+            
+            referer = 'https://www.google.com/'
+            if 'lbcgroup.tv' in url:
+                referer = 'https://www.lbcgroup.tv/'
+            
+            req = urllib.request.Request(url, headers={
+                'User-Agent': USER_AGENT,
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                'Accept-Encoding': 'gzip, deflate',
+                'Referer': referer
+            })
+            
+            resp = opener.open(req, timeout=12)
             content = resp.read()
             
             if resp.info().get('Content-Encoding') == 'gzip':
