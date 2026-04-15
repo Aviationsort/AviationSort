@@ -27,7 +27,12 @@ const AVIATION_RSS_URLS = [
   'https://feeds.feedburner.com/Ex-yuAviationNews',
   'https://www.aviationbusinessnews.com/feed/',
   'https://generalaviationnews.com/feed/',
-  'https://www.airbus.com/en/rss-all-feeds/15571?tid=15571&fid=29711'
+  'https://www.airbus.com/en/rss-all-feeds/15571?tid=15571&fid=29711',
+  'https://runwaygirlnetwork.com/feed/',
+  'https://www.airliners.net/rss',
+  'https://www.aviationpros.com/rss',
+  'https://www.aviationtoday.com/feed/',
+  'https://www.flightglobal.com/feed/',
 ];
 
 const WORLD_NEWS_URLS = [
