@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -22,13 +22,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
+  ChevronDown,
   X,
   Minus,
   Square,
   Settings,
-  Cpu,
-  Database,
   Globe,
   Clock,
   LayoutGrid,
@@ -58,23 +56,23 @@ import {
   Navigation,
   MapPin,
   Droplets,
-  Thermometer,
-  LogOut,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Maximize2,
+  LogOut
 } from 'lucide-react';
 import { cn } from './lib/utils';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  AreaChart,
-  Area
-} from 'recharts';
+import { fetchAviationNews, fetchWorldNews, AVIATION_RSS_URLS, WORLD_NEWS_URLS, NewsItem, NewsSource } from './lib/rss';
+
+const LineChart = lazy(() => import('recharts').then(module => ({ default: module.LineChart })));
+const Line = lazy(() => import('recharts').then(module => ({ default: module.Line })));
+const XAxis = lazy(() => import('recharts').then(module => ({ default: module.XAxis })));
+const YAxis = lazy(() => import('recharts').then(module => ({ default: module.YAxis })));
+const CartesianGrid = lazy(() => import('recharts').then(module => ({ default: module.CartesianGrid })));
+const Tooltip = lazy(() => import('recharts').then(module => ({ default: module.Tooltip })));
+const ResponsiveContainer = lazy(() => import('recharts').then(module => ({ default: module.ResponsiveContainer })));
+const AreaChart = lazy(() => import('recharts').then(module => ({ default: module.AreaChart })));
+const Area = lazy(() => import('recharts').then(module => ({ default: module.Area })));
 
 // --- Types ---
 
@@ -88,20 +86,6 @@ interface Photo {
   isFavorite: boolean;
   hashtags?: string[];
   isVideo?: boolean;
-}
-
-interface NewsItem {
-  id: string;
-  title: string;
-  summary: string;
-  date: string;
-  url: string;
-  source: string;
-}
-
-interface NewsSource {
-  name: string;
-  status: 'working' | 'failed';
 }
 
 interface Story {
@@ -171,56 +155,6 @@ interface ProfileData {
 const MOCK_FACTS = [
   "The world's oldest airline is KLM, established in 1919.",
   "The Boeing 747 is made up of six million parts.",
-];
-
-const RSS_URLS = [
-  'https://www.aeroroutes.com/?format=rss',
-  'https://www.aero-news.net/news/rssCOMANW.xml',
-  'https://samchui.com/feed/',
-  'https://simpleflying.com/feed/',
-  'https://theaviationist.com/feed/',
-  'https://www.airlinereporter.com/feed/',
-  'https://avgeekery.com/feed/',
-  'https://australianaviation.com.au/feed/',
-  'https://feeds.feedburner.com/Ex-yuAviationNews',
-  'https://www.aviationbusinessnews.com/feed/',
-  'https://generalaviationnews.com/feed/',
-  'https://www.airbus.com/en/rss-all-feeds/15571?tid=15571&fid=29711'
-];
-
-const POLITICAL_RSS_URLS = [
-  'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
-  'https://www.cbc.ca/webfeed/rss/rss-politics',
-  'https://www.cbc.ca/webfeed/rss/rss-canada',
-  'https://www.cbc.ca/webfeed/rss/rss-world',
-  'https://www.lbcgroup.tv/Rss/News/en/8/lebanon-news',
-  'https://www.the961.com/feed/',
-  'https://rss.politico.com/politics-news.xml',
-  'https://apnews.com/politics.rss',
-  'https://www.bbc.com/news/politics',
-  'https://www.bloomberg.com/politics',
-  'https://www.nbcnews.com/politics',
-  'https://edition.cnn.com/politics',
-  'https://www.axios.com/politics-policy/',
-  'https://www.theatlantic.com/politics/',
-  'https://time.com/section/politics/',
-  'https://www.politicshome.com/news/rss',
-  'https://www.europarl.europa.eu/rss/doc/press-releases/en.xml',
-  'https://www.france24.com/en/europe/rss',
-  'https://feeds.feedburner.com/euronews/en/home/',
-  'https://brusselsmorning.com/feed/',
-  'https://feeds.thelocal.com/rss/es',
-  'https://feeds.feedburner.com/TheBalticTimesNews',
-  'https://www.albawaba.com/rss/all',
-  'https://www.middleeasteye.net/rss',
-  'https://www.scmp.com/rss/318198/feed/',
-  'https://www.scmp.com/rss/5/feed/',
-  'https://www.xinhuanet.com/english/rss/worldrss.xml',
-  'https://www.themoscowtimes.com/rss/news',
-  'http://government.ru/en/all/rss/',
-  'https://www.rt.com/rss/',
-  'https://ria.ru/export/rss2/index.xml?page_type=google_newsstand',
-  'https://notesfrompoland.com/feed/'
 ];
 
 // --- Components ---
@@ -2882,7 +2816,24 @@ const TRANSLATIONS = {
     aqiFair: "Umiarkowana",
     aqiModerate: "Średnia",
     aqiPoor: "Zła",
-    aqiVeryPoor: "Bardzo zła"
+    aqiVeryPoor: "Bardzo zła",
+    clock: "Zegar",
+    articlesPerPage: "Artykułów na stronę",
+    swipeFriends: "Przesuwaj, aby znaleźć znajomych",
+    startChat: "Rozpocznij czat",
+    hangarDoors: "Proszę nie zamykać drzwi hangaru...",
+    shareProfileTitle: "Udostępnij profil",
+    scanToConnect: "Skanuj, aby połączyć się na SkyChat",
+    copyLink: "Kopiuj link profilu",
+    close: "Zamknij",
+    date: "Data",
+    locationLabel: "Lokalizacja",
+    resetRadar: "Zresetuj radar",
+    worldNews: "Wiadomości Światowe",
+    loadingSources: "Ładowanie źródeł",
+    fetchingLatest: "Pobieranie najnowszych wiadomości...",
+    articlesLoaded: "artykułów załadowanych ze źródeł",
+    rssEnglishOnly: "Kanały RSS są dostępne tylko w języku angielskim"
   },
   ru: {
     dashboard: "Панель",
@@ -4266,7 +4217,12 @@ const TRANSLATIONS = {
     close: "Zatvori",
     date: "Datum",
     locationLabel: "Lokacija",
-    resetRadar: "Resetuj radar"
+    resetRadar: "Resetuj radar",
+    worldNews: "Svetske vesti",
+    loadingSources: "Učitavanje izvora",
+    fetchingLatest: "Preuzimanje najnovijih vesti...",
+    articlesLoaded: "artikala učitano iz izvora",
+    rssEnglishOnly: "RSS feedovi su dostupni samo na engleskom"
   },
   ka: {
     dashboard: "მართვის პანელი",
@@ -4938,85 +4894,30 @@ const AeroWatch = ({ className, lang = 'en', style = 'analog', background = null
   );
 };
 
-const DynamicAtmosphere = () => (
+const DynamicAtmosphere = React.memo(() => (
   <div className="fixed inset-0 pointer-events-none z-[-1] overflow-hidden bg-black">
-    {/* Deep Background Glow */}
+    {/* Deep Background Glow - Static for performance */}
     <div className="absolute inset-0 bg-gradient-to-br from-red-950/30 via-black to-black" />
 
-    {/* Aurora Curtains */}
-    {[...Array(6)].map((_, i) => (
-      <motion.div
-        key={`aurora-${i}`}
-        className="absolute w-[150%] h-[150%] opacity-[0.12]"
-        style={{
-          background: `radial-gradient(ellipse at center, ${
-            i % 3 === 0 ? 'rgba(255, 0, 0, 0.4)' : 
-            i % 3 === 1 ? 'rgba(128, 0, 128, 0.2)' : 
-            'rgba(74, 74, 74, 0.3)'
-          } 0%, transparent 70%)`,
-          left: `${-25 + (i * 10)}%`,
-          top: '-25%',
-          filter: 'blur(100px)',
-          transform: `skewX(${i % 2 === 0 ? '20deg' : '-20deg'})`,
-        }}
-        animate={{
-          x: [0, 100, -100, 0],
-          y: [0, -50, 50, 0],
-          scaleY: [1, 1.2, 0.9, 1],
-          opacity: [0.08, 0.15, 0.08],
-        }}
-        transition={{
-          duration: 30 + i * 12,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-    ))}
+    {/* CSS-based Aurora Curtains - No JS animations */}
+    <div className="absolute inset-0">
+      <div className="aurora-1" />
+      <div className="aurora-2" />
+      <div className="aurora-3" />
+    </div>
 
-    {/* Light Refractions / Lens Flares */}
-    {[...Array(4)].map((_, i) => (
-      <motion.div
-        key={`refraction-${i}`}
-        className="absolute w-[2px] h-[300%] bg-gradient-to-b from-transparent via-red-500/15 to-transparent"
-        style={{
-          left: `${15 + i * 25}%`,
-          top: '-100%',
-          rotate: '40deg',
-          filter: 'blur(50px)',
-        }}
-        animate={{
-          x: [-300, 500],
-          opacity: [0, 0.2, 0],
-        }}
-        transition={{
-          duration: 20 + i * 8,
-          repeat: Infinity,
-          ease: "linear",
-          delay: i * 4,
-        }}
-      />
-    ))}
+    {/* Light Refractions - Static with CSS animation */}
+    <div className="absolute inset-0">
+      <div className="refraction-1" />
+      <div className="refraction-2" />
+    </div>
 
-    {/* Drifting Clouds */}
-    {[...Array(8)].map((_, i) => (
-      <motion.div
-        key={`cloud-${i}`}
-        className="absolute bg-white/5 rounded-full blur-[100px]"
-        style={{
-          width: 600 + Math.random() * 600,
-          height: 400 + Math.random() * 400,
-          top: `${Math.random() * 100}%`,
-        }}
-        initial={{ x: '-150%' }}
-        animate={{ x: '250%' }}
-        transition={{
-          duration: 120 + Math.random() * 120,
-          repeat: Infinity,
-          ease: "linear",
-          delay: -Math.random() * 240,
-        }}
-      />
-    ))}
+    {/* Static blurred clouds for performance */}
+    <div className="absolute inset-0">
+      <div className="cloud-1" />
+      <div className="cloud-2" />
+      <div className="cloud-3" />
+    </div>
 
     {/* Subtle Scanlines */}
     <div className="absolute inset-0 opacity-[0.015] pointer-events-none" 
@@ -5025,48 +4926,20 @@ const DynamicAtmosphere = () => (
     {/* Vignette */}
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_100%)]" />
   </div>
-);
+));
 
-const AeroBubbles = () => (
+const AeroBubbles = React.memo(() => (
   <div className="aero-bubbles">
     <DynamicAtmosphere />
-    {[...Array(20)].map((_, i) => (
-      <motion.div
-        key={i}
-        className={cn(
-          "bubble shadow-[inset_0_4px_12px_rgba(255,255,255,0.2),0_8px_32px_rgba(0,0,0,0.3)]",
-          i % 2 === 0 && "animate-aero-rotate",
-          i % 4 === 0 ? "bg-red-500/10 border-red-500/20" : 
-          i % 4 === 1 ? "bg-grey-500/10 border-grey-500/20" : 
-          i % 4 === 2 ? "bg-red-900/10 border-red-900/20" :
-          "bg-white/5 border-white/10"
-        )}
-        initial={{ 
-          x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1000), 
-          y: (typeof window !== 'undefined' ? window.innerHeight : 800) + 200,
-          scale: Math.random() * 0.4 + 0.3,
-          opacity: Math.random() * 0.4 + 0.1
-        }}
-        animate={{ 
-          y: -400,
-          x: (Math.random() - 0.5) * 200 + (typeof window !== 'undefined' ? Math.random() * window.innerWidth : 500),
-          rotate: [0, 360]
-        }}
-        transition={{ 
-          duration: Math.random() * 30 + 30, 
-          repeat: Infinity, 
-          ease: "linear",
-          delay: Math.random() * -30
-        }}
-        style={{
-          width: Math.random() * 120 + 40,
-          height: Math.random() * 120 + 40,
-          left: `${Math.random() * 100}vw`,
-        }}
-      />
-    ))}
+    {/* Static CSS-based bubbles - No JS animations */}
+    <div className="bubble bubble-static-1" />
+    <div className="bubble bubble-static-2" />
+    <div className="bubble bubble-static-3" />
+    <div className="bubble bubble-static-4" />
+    <div className="bubble bubble-static-5" />
+    <div className="bubble bubble-static-6" />
   </div>
-);
+));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -5123,7 +4996,20 @@ export default function App() {
   const [newHashtag, setNewHashtag] = useState('');
   const [currentFileName, setCurrentFileName] = useState<string>('');
   const [lang, setLang] = useState<'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es'>('en');
-  const t = (TRANSLATIONS as any)[lang] || TRANSLATIONS.en;
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+  const t = useMemo(() => (TRANSLATIONS as any)[lang] || TRANSLATIONS.en, [lang]);
+
+  useEffect(() => {
+    if (!langMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setLangMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [langMenuOpen]);
 
   // Profile State
   const [profile, setProfile] = useState<ProfileData>({
@@ -5262,48 +5148,95 @@ export default function App() {
   // Initial Weather Fetch
   useEffect(() => {
     const fetchInitialWeather = async () => {
-const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
+      const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
+      
+      // Fallback weather data when no API key
+      const fallbackWeather = () => {
+        setWeather({
+          temp: 20,
+          condition: 'Clear',
+          description: 'clear sky',
+          wind: 5,
+          visibility: 10000,
+          humidity: 60,
+          pressure: 1013,
+          aqi: 1,
+          city: 'London',
+          icon: '01d'
+        });
+      };
+      
+      // Return early if no API key
+      if (!apiKey) {
+        fallbackWeather();
+        return;
+      }
+      
       try {
         navigator.geolocation.getCurrentPosition(async (position) => {
           const { latitude, longitude } = position.coords;
           const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=${lang === 'ar' ? 'ar' : lang}`);
+          
+          if (!response.ok) {
+            fallbackWeather();
+            return;
+          }
+          
           const data = await response.json();
+          if (!data.main) {
+            fallbackWeather();
+            return;
+          }
           
           const aqiResponse = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${apiKey}`);
-          const aqiData = await aqiResponse.json();
+          const aqiData = aqiResponse.ok ? await aqiResponse.json() : { list: [{ main: { aqi: 1 } }] };
 
           setWeather({
             temp: data.main.temp,
-            condition: data.weather[0].main,
-            description: data.weather[0].description,
-            wind: data.wind.speed,
-            visibility: data.main.visibility,
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            aqi: aqiData.list[0].main.aqi,
-            city: data.name,
-            icon: data.weather[0].icon
+            condition: data.weather?.[0]?.main || 'Clear',
+            description: data.weather?.[0]?.description || 'clear sky',
+            wind: data.wind?.speed || 0,
+            visibility: data.main?.visibility || 10000,
+            humidity: data.main?.humidity || 60,
+            pressure: data.main?.pressure || 1013,
+            aqi: aqiData.list?.[0]?.main?.aqi || 1,
+            city: data.name || 'Unknown',
+            icon: data.weather?.[0]?.icon || '01d'
           });
         }, async () => {
+          // Fallback to London if geolocation fails
           const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey}&units=metric&lang=${lang === 'ar' ? 'ar' : lang}`);
+          
+          if (!response.ok) {
+            fallbackWeather();
+            return;
+          }
+          
           const data = await response.json();
+          if (!data.main) {
+            fallbackWeather();
+            return;
+          }
+          
           const aqiResponse = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${data.coord.lat}&lon=${data.coord.lon}&appid=${apiKey}`);
-          const aqiData = await aqiResponse.json();
+          const aqiData = aqiResponse.ok ? await aqiResponse.json() : { list: [{ main: { aqi: 1 } }] };
+          
           setWeather({
             temp: data.main.temp,
-            condition: data.weather[0].main,
-            description: data.weather[0].description,
-            wind: data.wind.speed,
-            visibility: data.main.visibility,
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            aqi: aqiData.list[0].main.aqi,
-            city: data.name,
-            icon: data.weather[0].icon
+            condition: data.weather?.[0]?.main || 'Clear',
+            description: data.weather?.[0]?.description || 'clear sky',
+            wind: data.wind?.speed || 0,
+            visibility: data.main?.visibility || 10000,
+            humidity: data.main?.humidity || 60,
+            pressure: data.main?.pressure || 1013,
+            aqi: aqiData.list?.[0]?.main?.aqi || 1,
+            city: data.name || 'London',
+            icon: data.weather?.[0]?.icon || '01d'
           });
         });
       } catch (error) {
-        console.error("Initial weather fetch failed:", error);
+        console.error("Weather fetch error:", error);
+        fallbackWeather();
       }
     };
     fetchInitialWeather();
@@ -5317,24 +5250,17 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
         
         // Initialize feed status
         const initStatus = [
-          ...(RSS_URLS || []).map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime })),
-          ...(POLITICAL_RSS_URLS || []).map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime }))
+          ...AVIATION_RSS_URLS.map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime })),
+          ...WORLD_NEWS_URLS.map((url: string) => ({ url, status: 'loading' as const, message: 'Fetching...', time: startTime }))
         ];
         setFeedStatus(initStatus);
         
-        const [photosRes, newsRes, storiesRes, friendsRes, requestsRes] = await Promise.all([
-          fetch('/api/photos'),
-          fetch('/api/news'),
-          fetch('/api/stories'),
-          fetch('/api/friends'),
-          fetch('/api/friend-requests')
+        // Fetch photos from server, use mock data for stories/friends/requests
+        const [photosRes] = await Promise.all([
+          fetch('/api/photos')
         ]);
 
         const photosData = await photosRes.json();
-        const newsData = await newsRes.json();
-        const storiesData = await storiesRes.json();
-        const friendsData = await friendsRes.json();
-        const requestsData = await requestsRes.json();
 
         setPhotos(photosData.map((p: any) => ({
           id: p.id,
@@ -5346,108 +5272,78 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
           isFavorite: false
         })));
         
-        if (newsData.articles) {
-          setNews(newsData.articles.map((a: any, i: number) => ({
-            id: String(i),
-            title: a.title,
-            summary: a.contentSnippet || '',
-            date: a.pubDate ? new Date(a.pubDate).toLocaleDateString() : 'Recent',
-            url: a.link,
-            source: a.source
-          })));
-          setNewsSources(newsData.sources || []);
-          
-          // Update feed status with aviation sources
-          if (newsData.sources) {
-            setAviationSources(newsData.sources);
-            setFeedStatus(prev => {
-              const updated = [...prev];
-              newsData.sources.forEach((s: any) => {
-                const idx = updated.findIndex(f => f.url === s.url);
-                if (idx >= 0) {
-                  updated[idx] = {
-                    url: s.url,
-                    status: s.status === 'working' ? 'success' : 'failed',
-                    message: s.status === 'working' ? `Fetched ${newsData.articles?.filter((a: any) => a.source === s.name).length || 0} articles` : s.status,
-                    time: new Date().toLocaleTimeString()
-                  };
-                }
-              });
-              return updated;
-            });
-          }
-        } else {
-          setNews(newsData);
-        }
-
-        setStories(storiesData);
-        setFriends(friendsData);
-        setRequests(requestsData);
-
-        // Fetch Political/World News with real-time progress
-        try {
-          setWorldNewsLoading(true);
-          setWorldNewsProgress(0);
-          
-          const eventSource = new EventSource('/api/news/world/stream');
-          
-          eventSource.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              
-              if (data.type === 'start') {
-                setWorldNewsProgress(0);
-              } else if (data.type === 'progress') {
-                setWorldNewsProgress(data.progress);
-                // Update feed status with source info
-                if (data.source && data.success !== undefined) {
-                  setFeedStatus(prev => {
-                    const sourceUrl = POLITICAL_RSS_URLS.find((url: string) => url.includes(data.source?.toLowerCase().replace(/\s/g, ''))) || '';
-                    if (!sourceUrl) return prev;
-                    const updated = [...prev];
-                    const idx = updated.findIndex(f => f.url === sourceUrl);
-                    if (idx >= 0) {
-                      updated[idx] = {
-                        url: sourceUrl,
-                        status: data.success ? 'success' : 'failed',
-                        message: data.success ? `Fetched ${data.itemsCount} articles` : 'Failed',
-                        time: new Date().toLocaleTimeString()
-                      };
-                    }
-                    return updated;
-                  });
-                }
-              } else if (data.type === 'complete') {
-                setWorldNewsProgress(100);
-                setWorldNewsLoading(false);
-                
-                if (data.articles) {
-                  setPoliticalNews(data.articles.map((a: any, i: number) => ({
-                    id: String(i),
-                    title: a.title,
-                    summary: a.contentSnippet || '',
-                    date: a.pubDate ? new Date(a.pubDate).toLocaleDateString() : 'Recent',
-                    url: a.link,
-                    source: a.source
-                  })));
-                  setPoliticalSources(data.sources || []);
-                }
-                eventSource.close();
-              } else if (data.type === 'error') {
-                console.error('Stream error:', data.error);
-              }
-            } catch (err) {
-              console.error('Failed to parse SSE data:', err);
+        // Use mock data for stories, friends, and requests
+        setStories([
+          { id: '1', username: 'aviation_fan', avatar: 'https://i.pravatar.cc/150?img=1', imageUrl: 'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?w=400', isUnread: true },
+          { id: '2', username: 'plane_spotter', avatar: 'https://i.pravatar.cc/150?img=2', imageUrl: 'https://images.unsplash.com/photo-1488085061387-422e29b40080?w=400', isUnread: true },
+          { id: '3', username: 'sky_watcher', avatar: 'https://i.pravatar.cc/150?img=3', imageUrl: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400', isUnread: false }
+        ]);
+        
+        setFriends([
+          { id: '1', username: 'aviation_fan', displayName: 'John Doe', avatar: 'https://i.pravatar.cc/150?img=1', status: 'online', homeAirport: 'LHR', favoriteAirline: 'Emirates' },
+          { id: '2', username: 'plane_spotter', displayName: 'Jane Smith', avatar: 'https://i.pravatar.cc/150?img=2', status: 'online', homeAirport: 'DXB', favoriteAirline: 'Emirates' },
+          { id: '3', username: 'sky_watcher', displayName: 'Mike Brown', avatar: 'https://i.pravatar.cc/150?img=3', status: 'offline', homeAirport: 'JFK', favoriteAirline: 'Delta' },
+          { id: '4', username: 'aero_lover', displayName: 'Sarah Wilson', avatar: 'https://i.pravatar.cc/150?img=4', status: 'online', homeAirport: 'SIN', favoriteAirline: 'Singapore Airlines' },
+          { id: '5', username: 'jet_setter', displayName: 'Tom Davis', avatar: 'https://i.pravatar.cc/150?img=5', status: 'offline', homeAirport: 'LAX', favoriteAirline: 'United' }
+        ]);
+        
+        setRequests([
+          { id: '1', username: 'new_spotter', displayName: 'Alex Johnson', avatar: 'https://i.pravatar.cc/150?img=6', homeAirport: 'ORD', favoriteAirline: 'American Airlines', time: '2h ago' },
+          { id: '2', username: 'sky_chaser', displayName: 'Emily Chen', avatar: 'https://i.pravatar.cc/150?img=7', homeAirport: 'HKG', favoriteAirline: 'Cathay Pacific', time: '1d ago' }
+        ]);
+        
+        // Initialize chats from mock friends
+        setChats([
+          { id: '1', username: 'aviation_fan', avatar: 'https://i.pravatar.cc/150?img=1', lastMessage: 'Start a conversation...', time: '', unreadCount: 0, messages: [] },
+          { id: '2', username: 'plane_spotter', avatar: 'https://i.pravatar.cc/150?img=2', lastMessage: 'Start a conversation...', time: '', unreadCount: 0, messages: [] },
+          { id: '3', username: 'sky_watcher', avatar: 'https://i.pravatar.cc/150?img=3', lastMessage: 'Start a conversation...', time: '', unreadCount: 0, messages: [] }
+        ]);
+        
+        // Fetch aviation news using server proxy
+        const newsResult = await fetchAviationNews((source, count) => {
+          setFeedStatus(prev => {
+            const updated = [...prev];
+            const idx = updated.findIndex(f => AVIATION_RSS_URLS.some(url => url.includes(source) && f.url.includes(source)));
+            if (idx >= 0) {
+              updated[idx] = {
+                url: AVIATION_RSS_URLS.find(url => url.includes(source)) || '',
+                status: 'success',
+                message: `Fetched ${count} articles`,
+                time: new Date().toLocaleTimeString()
+              };
             }
-          };
-          
-          eventSource.onerror = () => {
-            setWorldNewsLoading(false);
-            eventSource.close();
-          };
-        } catch (err) {
-          console.error("Failed to fetch political news:", err);
-        }
+            return updated;
+          });
+        });
+        
+        setNews(newsResult.articles);
+        setNewsSources(newsResult.sources);
+        
+        // Fetch World News with progress
+        setWorldNewsLoading(true);
+        setWorldNewsProgress(0);
+        
+        const worldResult = await fetchWorldNews((progress, source) => {
+          setWorldNewsProgress(progress);
+          setFeedStatus(prev => {
+            const updated = [...prev];
+            const idx = updated.findIndex(f => WORLD_NEWS_URLS.some(url => url.includes(source?.toLowerCase().replace(/\s/g, ''))));
+            if (idx >= 0 && source) {
+              updated[idx] = {
+                url: WORLD_NEWS_URLS.find(url => url.includes(source?.toLowerCase().replace(/\s/g, ''))) || '',
+                status: 'success',
+                message: `Fetched news`,
+                time: new Date().toLocaleTimeString()
+              };
+            }
+            return updated;
+          });
+        });
+        
+        setPoliticalNews(worldResult.articles);
+        setPoliticalSources(worldResult.sources);
+        setWorldNewsLoading(false);
+        setWorldNewsProgress(100);
 
         // Fetch Weather (Open-Meteo)
         const weatherRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=51.4700&longitude=-0.4543&current_weather=true');
@@ -5466,17 +5362,6 @@ const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
             description: 'Clear sky'
           });
         }
-
-        // Initialize chats from friends
-        setChats(friendsData.map((f: any) => ({
-          id: f.id,
-          username: f.username,
-          avatar: f.avatar,
-          lastMessage: 'Start a conversation...',
-          time: '',
-          unreadCount: 0,
-          messages: []
-        })));
 
       } catch (err) {
         console.error("Failed to fetch initial data:", err);
@@ -5897,13 +5782,55 @@ const newMessage = {
           </div>
 
             <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-between md:justify-end overflow-x-auto no-scrollbar">
-              <button
-                onClick={() => setLang(lang === 'en' ? 'fr' : lang === 'fr' ? 'arz' : lang === 'arz' ? 'de' : lang === 'de' ? 'ru' : lang === 'ru' ? 'es' : 'en')}
-                className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0 hover:bg-white/10 transition-colors"
-              >
-                <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : lang === 'fr' ? '🇫🇷' : lang === 'arz' ? '🇪🇬' : lang === 'de' ? '🇩🇪' : lang === 'ru' ? '🇷🇺' : '🇪🇸'}</span>
-                <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : lang === 'fr' ? 'FR' : lang === 'arz' ? 'ARZ' : lang === 'de' ? 'DE' : lang === 'ru' ? 'RU' : 'ES'}</span>
-              </button>
+              <AnimatePresence>
+                <motion.div 
+                  ref={langMenuRef}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="relative"
+                >
+                  <button
+                    onClick={() => setLangMenuOpen(!langMenuOpen)}
+                    className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0 hover:bg-white/10 transition-colors"
+                  >
+                    <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : lang === 'fr' ? '🇫🇷' : lang === 'arz' ? '🇪🇬' : lang === 'de' ? '🇩🇪' : lang === 'ru' ? '🇷🇺' : '🇪🇸'}</span>
+                    <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : lang === 'fr' ? 'FR' : lang === 'arz' ? 'ARZ' : lang === 'de' ? 'DE' : lang === 'ru' ? 'RU' : 'ES'}</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  
+                  {langMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute top-full mt-2 right-0 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-2xl p-2 shadow-2xl z-50 min-w-[160px]"
+                    >
+                      {[
+                        { code: 'en', label: 'English', flag: '🇬🇧' },
+                        { code: 'fr', label: 'Français', flag: '🇫🇷' },
+                        { code: 'arz', label: 'العربية', flag: '🇪🇬' },
+                        { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+                        { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+                        { code: 'es', label: 'Español', flag: '🇪🇸' }
+                      ].map((l) => (
+                        <button
+                          key={l.code}
+                          onClick={() => { setLang(l.code as 'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es'); setLangMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-bold transition-colors",
+                            lang === l.code ? "bg-red-500/20 text-red-500" : "hover:bg-white/10 text-white/80"
+                          )}
+                        >
+                          <span>{l.flag}</span>
+                          <span>{l.label}</span>
+                          {lang === l.code && <Check className="w-4 h-4 ml-auto text-red-500" />}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             <div className="aero-window-controls shrink-0">
               <button className="aero-control-btn"><Minus className="w-4 h-4" /></button>
               <button className="aero-control-btn"><Square className="w-3 h-3" /></button>
@@ -6572,14 +6499,15 @@ const newMessage = {
                         { id: 'scientific', label: 'Scientific' },
                         { id: 'analytical', label: 'Analytical' }
                       ].map((mode) => (
-                        <AeroButton
-                          key={mode.id}
-                          variant={calcMode === mode.id ? 'red' : 'black'}
-                          className="px-3 py-1 text-xs"
-                          onClick={() => setCalcMode(mode.id as any)}
-                        >
-                          {mode.label}
-                        </AeroButton>
+                        <React.Fragment key={mode.id}>
+                          <AeroButton
+                            variant={calcMode === mode.id ? 'red' : 'black'}
+                            className="px-3 py-1 text-xs"
+                            onClick={() => setCalcMode(mode.id as any)}
+                          >
+                            {mode.label}
+                          </AeroButton>
+                        </React.Fragment>
                       ))}
                     </div>
 
@@ -7333,14 +7261,15 @@ const newMessage = {
                       { id: 'timer', label: 'Timer' },
                       { id: 'world', label: 'World Clock' }
                     ].map((mode) => (
-                      <AeroButton
-                        key={mode.id}
-                        variant={clockMode === mode.id ? 'red' : 'black'}
-                        className="px-4 py-2 text-xs"
-                        onClick={() => setClockMode(mode.id as any)}
-                      >
-                        {mode.label}
-                      </AeroButton>
+                      <React.Fragment key={mode.id}>
+                        <AeroButton
+                          variant={clockMode === mode.id ? 'red' : 'black'}
+                          className="px-4 py-2 text-xs"
+                          onClick={() => setClockMode(mode.id as any)}
+                        >
+                          {mode.label}
+                        </AeroButton>
+                      </React.Fragment>
                     ))}
                   </div>
 
@@ -7351,14 +7280,15 @@ const newMessage = {
                           { id: 'analog', label: 'Analog' },
                           { id: 'digital', label: 'Digital' }
                         ].map((style) => (
-                          <AeroButton
-                            key={style.id}
-                            variant={watchStyle === style.id ? 'red' : 'black'}
-                            className="px-3 py-1 text-xs"
-                            onClick={() => setWatchStyle(style.id as any)}
-                          >
-                            {style.label}
-                          </AeroButton>
+                          <React.Fragment key={style.id}>
+                            <AeroButton
+                              variant={watchStyle === style.id ? 'red' : 'black'}
+                              className="px-3 py-1 text-xs"
+                              onClick={() => setWatchStyle(style.id as any)}
+                            >
+                              {style.label}
+                            </AeroButton>
+                          </React.Fragment>
                         ))}
                         {watchStyle === 'digital' && (
                           <>
@@ -7475,18 +7405,19 @@ const newMessage = {
                       </div>
                       <div className="flex gap-2 flex-wrap justify-center">
                         {[60, 120, 300, 600, 900, 1800].map((sec) => (
-                          <AeroButton
-                            key={sec}
-                            variant={timerRemaining === sec && !timerRunning ? 'red' : 'black'}
-                            className="px-3 py-1 text-xs"
-                            onClick={() => {
-                              setTimerRemaining(sec);
-                              setTimerSeconds(sec);
-                              setTimerRunning(false);
-                            }}
-                          >
-                            {sec < 60 ? `${sec}s` : `${sec / 60}m`}
-                          </AeroButton>
+                          <React.Fragment key={sec}>
+                            <AeroButton
+                              variant={timerRemaining === sec && !timerRunning ? 'red' : 'black'}
+                              className="px-3 py-1 text-xs"
+                              onClick={() => {
+                                setTimerRemaining(sec);
+                                setTimerSeconds(sec);
+                                setTimerRunning(false);
+                              }}
+                            >
+                              {sec < 60 ? `${sec}s` : `${sec / 60}m`}
+                            </AeroButton>
+                          </React.Fragment>
                         ))}
                       </div>
                       <div className="flex gap-4">
