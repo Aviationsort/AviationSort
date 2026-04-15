@@ -11,6 +11,7 @@ print("AviationSort server starting...")
 # Configuration
 PORT = 5001
 DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
 # Simple in-memory cache with thread safety
 class ProxyCache:
@@ -61,6 +62,87 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS profiles (
 
 conn.commit()
 
+# Connect to flexpics.db
+flexpics_conn = sqlite3.connect('flexpics.db', check_same_thread=False)
+
+# Connect to playlists.db
+playlists_conn = sqlite3.connect('playlists.db', check_same_thread=False)
+playlists_cursor = playlists_conn.cursor()
+
+playlists_cursor.execute('''CREATE TABLE IF NOT EXISTS playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    username TEXT,
+    created_at TEXT
+)''')
+
+playlists_cursor.execute('''CREATE TABLE IF NOT EXISTS tracks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source TEXT NOT NULL,
+    duration INTEGER DEFAULT 0,
+    thumbnail TEXT,
+    added_at TEXT,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+)''')
+
+playlists_conn.commit()
+flexpics_cursor = flexpics_conn.cursor()
+
+flexpics_cursor.execute('''CREATE TABLE IF NOT EXISTS flexpics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT,
+    photo_url TEXT,
+    photo_thumbnail_url TEXT,
+    photo_registration TEXT,
+    photo_airline TEXT,
+    photo_aircraft_type TEXT,
+    photo_date TEXT,
+    file_directory TEXT,
+    date_added TEXT,
+    hashtags TEXT,
+    is_video INTEGER DEFAULT 0,
+    width INTEGER,
+    height INTEGER,
+    file_size INTEGER
+)''')
+
+flexpics_conn.commit()
+
+def find_similar_flexpics(registration=None, airline=None, aircraft_type=None):
+    """Find similar flexpics in flexpics.db based on content similarity"""
+    similar = []
+    
+    if registration:
+        flexpics_cursor.execute(
+            'SELECT * FROM flexpics WHERE photo_registration LIKE ? OR photo_registration LIKE ?',
+            (f'%{registration}%', f'%{registration[-3:]}%')
+        )
+        similar.extend(flexpics_cursor.fetchall())
+    
+    if airline and not similar:
+        flexpics_cursor.execute(
+            'SELECT * FROM flexpics WHERE photo_airline LIKE ?',
+            (f'%{airline}%',)
+        )
+        similar.extend(flexpics_cursor.fetchall())
+    
+    if aircraft_type and not similar:
+        flexpics_cursor.execute(
+            'SELECT * FROM flexpics WHERE photo_aircraft_type LIKE ?',
+            (f'%{aircraft_type}%',)
+        )
+        similar.extend(flexpics_cursor.fetchall())
+    
+    return similar
+
+def get_user_flexpics_from_db(username):
+    """Get all flexpics for a user from flexpics.db"""
+    flexpics_cursor.execute('SELECT * FROM flexpics WHERE username = ?', (username,))
+    return flexpics_cursor.fetchall()
+
 # Initialize Flask app
 app = Flask(__name__, static_folder=DIRECTORY)
 
@@ -75,7 +157,7 @@ def add_cors_headers(response):
 # Optimized proxy with caching
 @app.route('/api/proxy')
 def cors_proxy():
-    import urllib.request
+    import cloudscraper
     import gzip
     
     url = request.args.get('url', '')
@@ -90,36 +172,30 @@ def cors_proxy():
         if cached:
             return cached, 200, {'Content-Type': 'text/xml; charset=utf-8', 'X-Cache': 'HIT'}
     
-    USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    
     try:
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+        scraper = cloudscraper.create_scraper()
         
-        https_handler = urllib.request.HTTPSHandler(context=ctx)
-        opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler, https_handler)
-        
-        referer = 'https://www.google.com/'
         if 'lbcgroup.tv' in url:
             referer = 'https://www.lbcgroup.tv/'
+        elif 'runwaygirlnetwork' in url:
+            referer = 'https://runwaygirlnetwork.com/'
+        else:
+            referer = 'https://www.google.com/'
         
-        req = urllib.request.Request(url, headers={
+        scraper.headers.update({
             'User-Agent': USER_AGENT,
-            'Accept': 'application/rss+xml, application/xml, text/xml, text/html, */*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
             'Referer': referer
         })
         
-        response = opener.open(req, timeout=15)
-        content = response.read()
+        response = scraper.get(url, timeout=15)
+        content = response.content
         
-        if response.info().get('Content-Encoding') == 'gzip':
-            content = gzip.decompress(content)
+        if response.headers.get('Content-Encoding') == 'gzip':
+            try:
+                content = gzip.decompress(content)
+            except:
+                pass
         
         try:
             text = content.decode('utf-8')
@@ -153,7 +229,7 @@ def cors_proxy():
 # Batch proxy for multiple URLs at once
 @app.route('/api/proxy/batch', methods=['POST'])
 def cors_proxy_batch():
-    import urllib.request
+    import cloudscraper
     import gzip
     
     data = request.json
@@ -165,34 +241,30 @@ def cors_proxy_batch():
     results = {}
     
     def fetch_url(url):
-        USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        
         try:
-            import ssl
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+            scraper = cloudscraper.create_scraper()
             
-            https_handler = urllib.request.HTTPSHandler(context=ctx)
-            opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler, https_handler)
-            
-            referer = 'https://www.google.com/'
             if 'lbcgroup.tv' in url:
                 referer = 'https://www.lbcgroup.tv/'
+            elif 'runwaygirlnetwork' in url:
+                referer = 'https://runwaygirlnetwork.com/'
+            else:
+                referer = 'https://www.google.com/'
             
-            req = urllib.request.Request(url, headers={
+            scraper.headers.update({
                 'User-Agent': USER_AGENT,
                 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-                'Accept-Encoding': 'gzip, deflate',
                 'Referer': referer
             })
             
-            resp = opener.open(req, timeout=12)
-            content = resp.read()
+            resp = scraper.get(url, timeout=12)
+            content = resp.content
             
-            if resp.info().get('Content-Encoding') == 'gzip':
-                content = gzip.decompress(content)
+            if resp.headers.get('Content-Encoding') == 'gzip':
+                try:
+                    content = gzip.decompress(content)
+                except:
+                    pass
             
             try:
                 text = content.decode('utf-8')
@@ -259,14 +331,89 @@ def save_profile():
     conn.commit()
     return jsonify({'success': True})
 
-@app.route('/api/favorites')
-def get_favorites():
-    username = request.args.get('username', '')
-    return jsonify([])
+@app.route('/api/flexpics')
+def get_flexpics():
+    username = request.args.get('username', '').lower()
+    print(f"Fetching flexpics for username: '{username}'")
+    if username:
+        flexpics_cursor.execute('SELECT * FROM flexpics WHERE LOWER(username) = ?', (username,))
+    else:
+        flexpics_cursor.execute('SELECT * FROM flexpics')
+    rows = flexpics_cursor.fetchall()
+    print(f"Found {len(rows)} flexpics")
+    flexpics = []
+    for row in rows:
+        flexpics.append({
+            'id': row[0],
+            'username': row[1],
+            'photo_url': row[2],
+            'photo_thumbnail_url': row[3] if len(row) > 3 else '',
+            'photo_registration': row[4] if len(row) > 4 else '',
+            'photo_airline': row[5] if len(row) > 5 else '',
+            'photo_aircraft_type': row[6] if len(row) > 6 else '',
+            'photo_date': row[7] if len(row) > 7 else '',
+            'file_directory': row[8] if len(row) > 8 else '',
+            'date_added': row[9] if len(row) > 9 else '',
+            'hashtags': row[10] if len(row) > 10 else '',
+            'is_video': bool(row[11]) if len(row) > 11 else False,
+            'width': row[12] if len(row) > 12 else 0,
+            'height': row[13] if len(row) > 13 else 0,
+            'file_size': row[14] if len(row) > 14 else 0
+        })
+    return jsonify(flexpics)
 
-@app.route('/api/favorites', methods=['POST'])
-def add_favorite():
+@app.route('/api/flexpics/similar')
+def get_similar_flexpics():
+    registration = request.args.get('registration', '')
+    airline = request.args.get('airline', '')
+    aircraft_type = request.args.get('aircraft_type', '')
+    
+    similar = find_similar_flexpics(registration, airline, aircraft_type)
+    
+    flexpics = []
+    for row in similar:
+        flexpics.append({
+            'id': row[0],
+            'username': row[1],
+            'photo_url': row[2],
+            'photo_registration': row[3],
+            'photo_airline': row[4],
+            'photo_aircraft_type': row[5],
+            'photo_date': row[6],
+            'file_directory': row[7],
+            'date_added': row[8]
+        })
+    return jsonify(flexpics)
+
+@app.route('/api/flexpics', methods=['POST'])
+def add_flexpic():
     data = request.json
+    flexpics_cursor.execute('''INSERT INTO flexpics (username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, file_directory, date_added, hashtags, is_video, width, height, file_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+        data.get('username', ''),
+        data.get('photo_url', ''),
+        data.get('photo_thumbnail_url', ''),
+        data.get('photo_registration', ''),
+        data.get('photo_airline', ''),
+        data.get('photo_aircraft_type', ''),
+        data.get('photo_date', ''),
+        data.get('file_directory', ''),
+        data.get('date_added', ''),
+        data.get('hashtags', ''),
+        1 if data.get('is_video') else 0,
+        data.get('width', 0),
+        data.get('height', 0),
+        data.get('file_size', 0)
+    ))
+    flexpics_conn.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/flexpics', methods=['DELETE'])
+def delete_flexpic():
+    data = request.json
+    photo_id = data.get('id', 0)
+    flexpics_cursor.execute('DELETE FROM flexpics WHERE id = ?', (photo_id,))
+    flexpics_conn.commit()
     return jsonify({'success': True})
 
 @app.route('/api/login', methods=['POST'])
@@ -282,6 +429,82 @@ def login():
     cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
     conn.commit()
     return jsonify({'success': True, 'username': username})
+
+# Playlist API Routes
+@app.route('/api/playlists')
+def get_playlists():
+    username = request.args.get('username', '')
+    if username:
+        playlists_cursor.execute('SELECT * FROM playlists WHERE username = ? ORDER BY created_at DESC', (username,))
+    else:
+        playlists_cursor.execute('SELECT * FROM playlists ORDER BY created_at DESC')
+    rows = playlists_cursor.fetchall()
+    playlists = []
+    for row in rows:
+        playlists.append({
+            'id': row[0],
+            'name': row[1],
+            'username': row[2],
+            'created_at': row[3]
+        })
+    return jsonify(playlists)
+
+@app.route('/api/playlists', methods=['POST'])
+def create_playlist():
+    data = request.json
+    name = data.get('name', 'Untitled Playlist')
+    username = data.get('username', 'anonymous')
+    import datetime
+    created_at = datetime.datetime.now().isoformat()
+    playlists_cursor.execute('INSERT INTO playlists (name, username, created_at) VALUES (?, ?, ?)', (name, username, created_at))
+    playlists_conn.commit()
+    return jsonify({'success': True, 'id': playlists_cursor.lastrowid})
+
+@app.route('/api/playlists/<int:playlist_id>', methods=['DELETE'])
+def delete_playlist(playlist_id):
+    playlists_cursor.execute('DELETE FROM playlists WHERE id = ?', (playlist_id,))
+    playlists_conn.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/playlists/<int:playlist_id>/tracks')
+def get_playlist_tracks(playlist_id):
+    playlists_cursor.execute('SELECT * FROM tracks WHERE playlist_id = ? ORDER BY added_at DESC', (playlist_id,))
+    rows = playlists_cursor.fetchall()
+    tracks = []
+    for row in rows:
+        tracks.append({
+            'id': row[0],
+            'playlist_id': row[1],
+            'title': row[2],
+            'url': row[3],
+            'source': row[4],
+            'duration': row[5],
+            'thumbnail': row[6],
+            'added_at': row[7]
+        })
+    return jsonify(tracks)
+
+@app.route('/api/playlists/<int:playlist_id>/tracks', methods=['POST'])
+def add_track_to_playlist(playlist_id):
+    data = request.json
+    import datetime
+    playlists_cursor.execute('INSERT INTO tracks (playlist_id, title, url, source, duration, thumbnail, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)', (
+        playlist_id,
+        data.get('title', 'Unknown'),
+        data.get('url', ''),
+        data.get('source', 'local'),
+        data.get('duration', 0),
+        data.get('thumbnail', ''),
+        datetime.datetime.now().isoformat()
+    ))
+    playlists_conn.commit()
+    return jsonify({'success': True, 'id': playlists_cursor.lastrowid})
+
+@app.route('/api/playlists/<int:playlist_id>/tracks/<int:track_id>', methods=['DELETE'])
+def remove_track_from_playlist(playlist_id, track_id):
+    playlists_cursor.execute('DELETE FROM tracks WHERE id = ?', (track_id,))
+    playlists_conn.commit()
+    return jsonify({'success': True})
 
 # Serve static files
 @app.route('/')

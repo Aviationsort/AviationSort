@@ -59,7 +59,18 @@ import {
   CheckCircle,
   AlertCircle,
   Maximize2,
-  LogOut
+  LogOut,
+  Music,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  Plus,
+  Trash2,
+  Upload,
+  Youtube
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { fetchAviationNews, fetchWorldNews, AVIATION_RSS_URLS, WORLD_NEWS_URLS, NewsItem, NewsSource } from './lib/rss';
@@ -740,6 +751,631 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
   );
 };
 
+// --- Music Player Component ---
+
+interface Track {
+  id: number;
+  playlist_id: number;
+  title: string;
+  url: string;
+  source: string;
+  duration: number;
+  thumbnail: string;
+  added_at: string;
+}
+
+interface Playlist {
+  id: number;
+  name: string;
+  username: string;
+  created_at: string;
+}
+
+const MusicPlayerComponent = ({ t }: { t: any }) => {
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(80);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showNewPlaylistModal, setShowNewPlaylistModal] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [trackTitle, setTrackTitle] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const audioRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const currentTrack = tracks[currentTrackIndex];
+
+  useEffect(() => {
+    fetchPlaylists();
+  }, []);
+
+  useEffect(() => {
+    if (selectedPlaylist) {
+      fetchTracks(selectedPlaylist.id);
+    }
+  }, [selectedPlaylist]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.play().catch(console.error);
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isPlaying, currentTrack]);
+
+  const fetchPlaylists = async () => {
+    try {
+      const res = await fetch('/api/playlists');
+      const data = await res.json();
+      setPlaylists(data);
+    } catch (err) {
+      console.error('Failed to fetch playlists:', err);
+    }
+  };
+
+  const fetchTracks = async (playlistId: number) => {
+    try {
+      const res = await fetch(`/api/playlists/${playlistId}/tracks`);
+      const data = await res.json();
+      setTracks(data);
+    } catch (err) {
+      console.error('Failed to fetch tracks:', err);
+    }
+  };
+
+  const createPlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+    try {
+      const res = await fetch('/api/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newPlaylistName, username: 'user' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchPlaylists();
+        setNewPlaylistName('');
+        setShowNewPlaylistModal(false);
+      }
+    } catch (err) {
+      console.error('Failed to create playlist:', err);
+    }
+  };
+
+  const deletePlaylist = async (playlistId: number) => {
+    try {
+      await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE' });
+      if (selectedPlaylist?.id === playlistId) {
+        setSelectedPlaylist(null);
+        setTracks([]);
+      }
+      fetchPlaylists();
+    } catch (err) {
+      console.error('Failed to delete playlist:', err);
+    }
+  };
+
+  const addLocalTrack = async () => {
+    if (!selectedPlaylist || !trackTitle.trim()) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedPlaylist) return;
+    
+    setIsLoading(true);
+    const file = files[0];
+    const url = URL.createObjectURL(file);
+    
+    try {
+      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: trackTitle || file.name,
+          url: url,
+          source: 'local',
+          duration: 0,
+          thumbnail: ''
+        })
+      });
+      fetchTracks(selectedPlaylist.id);
+      setTrackTitle('');
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to add track:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addYouTubeTrack = async () => {
+    if (!selectedPlaylist || !youtubeUrl.trim()) return;
+    
+    setIsLoading(true);
+    try {
+      let videoId = '';
+      const ytMatch = youtubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+      if (ytMatch) {
+        videoId = ytMatch[1];
+      }
+      
+      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: trackTitle || `YouTube Track`,
+          url: youtubeUrl,
+          source: 'youtube',
+          duration: 0,
+          thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
+        })
+      });
+      fetchTracks(selectedPlaylist.id);
+      setYoutubeUrl('');
+      setTrackTitle('');
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to add YouTube track:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteTrack = async (trackId: number) => {
+    if (!selectedPlaylist) return;
+    try {
+      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks/${trackId}`, { method: 'DELETE' });
+      fetchTracks(selectedPlaylist.id);
+    } catch (err) {
+      console.error('Failed to delete track:', err);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+      setDuration(audioRef.current.duration || 0);
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseInt(e.target.value);
+    setVolume(vol);
+    if (audioRef.current) {
+      audioRef.current.volume = vol / 100;
+    }
+    if (vol > 0) setIsMuted(false);
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      if (isMuted) {
+        audioRef.current.volume = volume / 100;
+        setIsMuted(false);
+      } else {
+        audioRef.current.volume = 0;
+        setIsMuted(true);
+      }
+    }
+  };
+
+  const playNext = () => {
+    if (currentTrackIndex < tracks.length - 1) {
+      setCurrentTrackIndex(currentTrackIndex + 1);
+    }
+  };
+
+  const playPrev = () => {
+    if (currentTrackIndex > 0) {
+      setCurrentTrackIndex(currentTrackIndex - 1);
+    }
+  };
+
+  const getEmbedUrl = (url: string) => {
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+    if (ytMatch) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&controls=1`;
+    }
+    return url;
+  };
+
+  return (
+    <motion.div
+      key="music"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="h-full flex flex-col items-center gap-4 overflow-auto py-2"
+    >
+      {/* Panasonic SL-SW950 Body */}
+      <div className="sw-player-wrapper">
+        <div className="sw-body">
+          <div className="sw-rubber-fins" />
+          <div className="sw-lid">
+            <div className="sw-brick-texture" />
+            
+            {/* Header */}
+            <div className="sw-branding">
+              <h3 className="sw-panasonic">PANASONIC</h3>
+              <p className="sw-model">SL-SW950</p>
+            </div>
+
+            {/* Logo */}
+            <div className="sw-logo">SW</div>
+            <div className="sw-shockwave-text">SHOCK WAVE</div>
+
+            {/* Side Labels */}
+            <div className="sw-labels-row">
+              <span className="sw-label">MEMORY/RECALL</span>
+              <span className="sw-label">DIGITAL AUDIO</span>
+            </div>
+
+            {/* LCD Display */}
+            <div className={`sw-lcd ${isPlaying ? 'pulse' : ''}`}>
+              <div className="sw-lcd-indicators">
+                <div className="sw-icon-group">
+                  <div className={`sw-icon ${isPlaying ? 'active' : ''}`} title="Play" />
+                  <div className="sw-icon" title="Pause" />
+                  <div className="sw-icon" title="Stop" />
+                  <div className={`sw-icon sw-icon-green`} title="EQ" />
+                </div>
+                <div className="sw-battery">
+                  <div className="sw-battery-level filled" />
+                  <div className="sw-battery-level filled" />
+                  <div className="sw-battery-level filled" />
+                </div>
+              </div>
+              <div className="sw-track-display">
+                {currentTrack ? (
+                  <>
+                    {String(currentTrackIndex + 1).padStart(2, '0')}
+                  </>
+                ) : (
+                  <span>--</span>
+                )}
+              </div>
+              <div className="sw-time-display">
+                {currentTrack ? formatTime(currentTime) : '--:--'}
+              </div>
+            </div>
+
+            {/* Video Player Area */}
+            <div className="sw-video-area">
+              {currentTrack ? (
+                currentTrack.source === 'youtube' ? (
+                  <iframe
+                    src={getEmbedUrl(currentTrack.url)}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    ref={audioRef}
+                    src={currentTrack.url}
+                    className="w-full h-full object-contain"
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={playNext}
+                    onLoadedMetadata={() => {
+                      if (audioRef.current) {
+                        setDuration(audioRef.current.duration);
+                      }
+                    }}
+                  />
+                )
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Music className="w-6 h-6 text-gray-600" />
+                </div>
+              )}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full px-2">
+              <div className="sw-progress">
+                <div 
+                  className="sw-progress-fill"
+                  style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+                />
+              </div>
+              <div className="sw-time-row">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
+
+            {/* EQ Display */}
+            <div className="sw-eq-bars">
+              {[...Array(8)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`sw-eq-bar ${isPlaying ? 'active' : ''}`}
+                  style={{ height: isPlaying ? `${20 + Math.random() * 30}%` : '4px' }}
+                />
+              ))}
+            </div>
+
+            {/* Control Buttons */}
+            <div className="sw-buttons">
+              <button onClick={playPrev} className="sw-btn sw-btn-prev" title="Previous">
+                <SkipBack className="w-3 h-3" />
+              </button>
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)} 
+                className={`sw-btn sw-btn-play ${isPlaying ? 'active' : ''}`}
+                disabled={!currentTrack}
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              </button>
+              <button onClick={playNext} className="sw-btn sw-btn-next" title="Next">
+                <SkipForward className="w-3 h-3" />
+              </button>
+              <button className="sw-btn sw-btn-stop" title="Stop">
+                <Square className="w-3 h-3" />
+              </button>
+              <button className="sw-btn sw-btn-mode" title="Mode">M</button>
+              <button className="sw-btn sw-btn-eq" title="EQ">EQ</button>
+              <button className="sw-btn sw-btn-recall" title="Memory">M</button>
+            </div>
+
+            {/* Hold Switch */}
+            <div className="sw-hold-switch">
+              <span className="sw-hold-label">HOLD</span>
+              <div className="sw-hold-toggle" title="Hold switch" />
+            </div>
+
+            {/* Volume Control */}
+            <div className="sw-volume">
+              <span className="sw-vol-label">-</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="sw-vol-slider"
+              />
+              <span className="sw-vol-label">+</span>
+            </div>
+
+            {/* ESP Indicator */}
+            <div className="sw-esp">
+              <span className="sw-esp-label">ESP</span>
+              <span className="sw-esp-value">48-SKIP</span>
+              <div className="sw-esp-bar">
+                <div className="sw-esp-fill" style={{ width: isPlaying ? '80%' : '20%' }} />
+              </div>
+            </div>
+
+            {/* Open Latch */}
+            <div className="sw-latch">
+              <span className="sw-latch-text">OPEN</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Playlists and Tracks */}
+      <div className="sw-player-lists">
+        <div className="sw-playlist-panel">
+          <div className="flex items-center justify-between mb-2">
+            <span className="sw-panel-header" style={{marginBottom: 0}}>{t.playlists}</span>
+            <button 
+              onClick={() => setShowNewPlaylistModal(true)}
+              className="p-1 hover:bg-gray-300 rounded"
+            >
+              <Plus className="w-3 h-3 text-gray-600" />
+            </button>
+          </div>
+          
+          <div className="space-y-1">
+            {playlists.length === 0 ? (
+              <p className="sw-empty">{t.noPlaylists}</p>
+            ) : (
+              playlists.map(playlist => (
+                <div
+                  key={playlist.id}
+                  className={`sw-track-item ${selectedPlaylist?.id === playlist.id ? 'active' : ''}`}
+                  onClick={() => setSelectedPlaylist(playlist)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="sw-track-title">{playlist.name}</p>
+                      <p className="sw-track-meta">{(new Date(playlist.created_at)).toLocaleDateString()}</p>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deletePlaylist(playlist.id);
+                      }}
+                      className="p-1 hover:bg-gray-300 rounded ml-2"
+                    >
+                      <Trash2 className="w-3 h-3 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="sw-playlist-panel">
+          <span className="sw-panel-header">
+            {selectedPlaylist ? selectedPlaylist.name : t.noPlaylists}
+          </span>
+          
+          <div className="space-y-1">
+            {!selectedPlaylist ? (
+              <p className="sw-empty">{t.createFirstPlaylist}</p>
+            ) : tracks.length === 0 ? (
+              <p className="sw-empty">{t.noTracks}</p>
+            ) : (
+              tracks.map((track, index) => (
+                <div
+                  key={track.id}
+                  className={`sw-track-item ${currentTrackIndex === index && currentTrack?.id === track.id ? 'active' : ''}`}
+                  onClick={() => setCurrentTrackIndex(index)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-gray-300 rounded flex items-center justify-center border border-gray-500">
+                      {track.source === 'youtube' ? (
+                        <Youtube className="w-3 h-3 text-blue-700" />
+                      ) : (
+                        <Music className="w-3 h-3 text-gray-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="sw-track-title">{track.title}</p>
+                      <p className="sw-track-meta">{track.source}</p>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTrack(track.id);
+                      }}
+                      className="p-1 hover:bg-gray-300 rounded"
+                    >
+                      <Trash2 className="w-3 h-3 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {selectedPlaylist && (
+            <button 
+              onClick={() => setShowAddModal(true)} 
+              className="mt-2 w-full py-1 px-2 bg-gray-200 border border-gray-400 rounded text-xs font-bold text-gray-600 hover:bg-gray-300"
+            >
+              + {t.addTrack}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* New Playlist Modal */}
+      {showNewPlaylistModal && (
+        <div className="sw-modal-overlay" onClick={() => setShowNewPlaylistModal(false)}>
+          <div className="sw-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="sw-modal-title">{t.createPlaylist}</h3>
+            <input
+              type="text"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              placeholder={t.playlists}
+              className="sw-input"
+            />
+            <div className="sw-modal-btns">
+              <button 
+                onClick={createPlaylist}
+                className="sw-modal-btn sw-btn-primary"
+              >
+                {t.createPlaylist}
+              </button>
+              <button 
+                onClick={() => setShowNewPlaylistModal(false)}
+                className="sw-modal-btn sw-btn-secondary"
+              >
+                {t.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Track Modal */}
+      {showAddModal && (
+        <div className="sw-modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="sw-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="sw-modal-title">{t.addTrack}</h3>
+            <input
+              type="text"
+              value={trackTitle}
+              onChange={(e) => setTrackTitle(e.target.value)}
+              placeholder={t.trackTitle}
+              className="sw-input"
+            />
+            
+            <div className="mb-3">
+              <p className="text-xs text-gray-600 mb-2">{t.addLocalFile}</p>
+              <button 
+                onClick={addLocalTrack}
+                className="w-full py-2 px-3 bg-gray-200 border border-gray-400 rounded text-xs font-bold text-gray-600 hover:bg-gray-300 flex items-center justify-center gap-2"
+              >
+                <Upload className="w-3 h-3" />
+                {t.addLocalFile}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*,video/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+            
+            <div className="mb-3">
+              <p className="text-xs text-gray-600 mb-2">{t.addFromYouTube}</p>
+              <input
+                type="text"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder={t.enterYouTubeUrl}
+                className="sw-input"
+              />
+              <button 
+                onClick={addYouTubeTrack}
+                disabled={!youtubeUrl.trim() || isLoading}
+                className="w-full py-2 px-3 bg-blue-700 border border-blue-900 rounded text-xs font-bold text-white hover:bg-blue-800 flex items-center justify-center gap-2"
+              >
+                <Youtube className="w-3 h-3" />
+                {t.addFromYouTube}
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => {
+                setShowAddModal(false);
+                setTrackTitle('');
+                setYoutubeUrl('');
+              }}
+              className="sw-modal-btn sw-btn-secondary w-full"
+            >
+              {t.close}
+            </button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 // --- Main App ---
 
 const TRANSLATIONS = {
@@ -884,7 +1520,21 @@ const TRANSLATIONS = {
     loadingSources: "Loading Sources",
     fetchingLatest: "Fetching latest world news...",
     articlesLoaded: "articles loaded from sources",
-    rssEnglishOnly: "RSS feeds are only available in English"
+    rssEnglishOnly: "RSS feeds are only available in English",
+    musicPlayer: "Music",
+    playlists: "Playlists",
+    nowPlaying: "Now Playing",
+    createPlaylist: "Create Playlist",
+    addTrack: "Add Track",
+    addFromYouTube: "Add from YouTube",
+    addLocalFile: "Add Local File",
+    enterYouTubeUrl: "Enter YouTube URL",
+    trackTitle: "Track Title",
+    noPlaylists: "No playlists yet",
+    noTracks: "No tracks in this playlist",
+    createFirstPlaylist: "Create your first playlist",
+    deletePlaylist: "Delete Playlist",
+    deleteTrack: "Delete Track"
   },
   fr: {
     dashboard: "Tableau de bord",
@@ -5850,6 +6500,7 @@ const newMessage = {
               { id: 'flexpics', icon: Heart, label: t.flexpics },
               { id: 'news', icon: Newspaper, label: t.news },
               { id: 'skychat', icon: MessageSquare, label: t.skychat },
+              { id: 'music', icon: Music, label: t.musicPlayer || 'Music' },
               { id: 'clock', icon: Clock, label: t.clock },
               { id: 'calculator', icon: Calculator, label: t.aerocalc },
               { id: 'profile', icon: User, label: t.profile },
@@ -7239,6 +7890,10 @@ const newMessage = {
                     </div>
                   </div>
                 </motion.div>
+              )}
+
+              {activeTab === 'music' && (
+                <MusicPlayerComponent t={t} />
               )}
 
               {activeTab === 'clock' && (
