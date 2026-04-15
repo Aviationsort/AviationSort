@@ -125,8 +125,21 @@ def cors_proxy():
             
     except Exception as e:
         import traceback
-        print(f"Proxy error: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        print(f"Proxy error for {url}: {error_msg}")
+        
+        if 'CERTIFICATE' in error_msg or 'SSL' in error_msg:
+            return jsonify({'error': 'SSL certificate error'}), 502
+        elif 'timed out' in error_msg.lower():
+            return jsonify({'error': 'Request timed out'}), 504
+        elif 'name or service not known' in error_msg.lower():
+            return jsonify({'error': 'Host not found'}), 502
+        elif '403' in error_msg or 'Forbidden' in error_msg:
+            return jsonify({'error': 'Access forbidden'}), 403
+        elif '404' in error_msg or 'Not Found' in error_msg:
+            return jsonify({'error': 'Resource not found'}), 404
+        else:
+            return jsonify({'error': error_msg}), 500
 
 # Batch proxy for multiple URLs at once
 @app.route('/api/proxy/batch', methods=['POST'])
@@ -162,10 +175,10 @@ def cors_proxy_batch():
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
             
-            response = urllib.request.urlopen(req, timeout=12, context=ctx)
-            content = response.read()
+            resp = urllib.request.urlopen(req, timeout=12, context=ctx)
+            content = resp.read()
             
-            if response.info().get('Content-Encoding') == 'gzip':
+            if resp.info().get('Content-Encoding') == 'gzip':
                 content = gzip.decompress(content)
             
             try:
@@ -177,7 +190,9 @@ def cors_proxy_batch():
             return url, text, None
             
         except Exception as e:
-            return url, None, str(e)
+            error_msg = str(e)
+            print(f"Batch proxy error for {url}: {error_msg}")
+            return url, None, error_msg
     
     # Fetch all URLs in parallel
     with ThreadPoolExecutor(max_workers=20) as executor:
@@ -186,7 +201,11 @@ def cors_proxy_batch():
             url, content, error = future.result()
             results[url] = {'content': content, 'error': error}
     
-    return jsonify(results)
+    status = 200
+    if any(r.get('error') for r in results.values()):
+        status = 207
+    
+    return jsonify(results), status
 
 # API Routes
 
