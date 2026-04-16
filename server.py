@@ -3,8 +3,12 @@ from flask import Flask, send_from_directory, request, jsonify
 import os
 import sqlite3
 import time
+import secrets
+import hashlib
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import secrets as sec
 
 print("AviationSort server starting...")
 
@@ -12,6 +16,95 @@ print("AviationSort server starting...")
 PORT = 5001
 DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+
+# ============== SIMPLE CRYPTO (No secrets - just basic operations) ==============
+PEPPER = b'aviation_sort_pepper_2024'
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(32)
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
+    return base64.b64encode(salt + pwd_hash).decode('utf-8')
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        data = base64.b64decode(stored_hash.encode('utf-8'))
+        salt = data[:32]
+        stored_pwd_hash = data[32:]
+        pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
+        return sec.compare_digest(pwd_hash, stored_pwd_hash)
+    except:
+        return False
+
+def generate_token(length: int = 32) -> str:
+    return secrets.token_urlsafe(length)
+
+def hash_data(data: str) -> str:
+    return hashlib.sha256(data.encode('utf-8') + PEPPER).hexdigest()
+
+# ============== SESSION MANAGEMENT ==============
+class SessionManager:
+    def __init__(self):
+        self._sessions = {}
+        self._lock = threading.Lock()
+        self._session_timeout = 3600
+    
+    def create_session(self, username: str) -> str:
+        token = generate_token()
+        with self._lock:
+            self._sessions[token] = {
+                'username': username,
+                'created': time.time(),
+                'last_activity': time.time()
+            }
+        return token
+    
+    def validate_session(self, token: str) -> str | None:
+        with self._lock:
+            if token in self._sessions:
+                session = self._sessions[token]
+                if time.time() - session['last_activity'] < self._session_timeout:
+                    session['last_activity'] = time.time()
+                    return session['username']
+                else:
+                    del self._sessions[token]
+        return None
+    
+    def destroy_session(self, token: str) -> bool:
+        with self._lock:
+            if token in self._sessions:
+                del self._sessions[token]
+                return True
+        return False
+    
+    def cleanup_sessions(self):
+        with self._lock:
+            now = time.time()
+            expired = [t for t, s in self._sessions.items() if now - s['last_activity'] > self._session_timeout]
+            for t in expired:
+                del self._sessions[t]
+
+sessions = SessionManager()
+
+# ============== RATE LIMITING ==============
+class RateLimiter:
+    def __init__(self):
+        self._requests = {}
+        self._lock = threading.Lock()
+        self._max_requests = 100
+        self._window = 60
+    
+    def is_allowed(self, identifier: str) -> bool:
+        with self._lock:
+            now = time.time()
+            if identifier not in self._requests:
+                self._requests[identifier] = []
+            self._requests[identifier] = [t for t in self._requests[identifier] if now - t < self._window]
+            if len(self._requests[identifier]) >= self._max_requests:
+                return False
+            self._requests[identifier].append(now)
+            return True
+
+rate_limiter = RateLimiter()
 
 # Simple in-memory cache with thread safety
 class ProxyCache:
@@ -47,7 +140,19 @@ cursor = conn.cursor()
 
 cursor.execute('''CREATE TABLE IF NOT EXISTS users (
     username TEXT PRIMARY KEY,
-    password TEXT
+    password TEXT NOT NULL,
+    created_at TEXT,
+    last_login TEXT,
+    failed_attempts INTEGER DEFAULT 0,
+    locked_until INTEGER DEFAULT 0
+)''')
+
+cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    username TEXT,
+    created_at TEXT,
+    expires_at INTEGER,
+    FOREIGN KEY (username) REFERENCES users(username)
 )''')
 
 cursor.execute('''CREATE TABLE IF NOT EXISTS profiles (
@@ -159,6 +264,7 @@ def add_cors_headers(response):
 def cors_proxy():
     import cloudscraper
     import gzip
+    import requests
     
     url = request.args.get('url', '')
     use_cache = request.args.get('cache', 'true').lower() == 'true'
@@ -209,22 +315,39 @@ def cors_proxy():
         return text, 200, {'Content-Type': 'text/xml; charset=utf-8', 'X-Cache': 'MISS'}
             
     except Exception as e:
-        import traceback
-        error_msg = str(e)
-        print(f"Proxy error for {url}: {error_msg}")
-        
-        if 'CERTIFICATE' in error_msg or 'SSL' in error_msg:
-            return jsonify({'error': 'SSL certificate error'}), 502
-        elif 'timed out' in error_msg.lower():
-            return jsonify({'error': 'Request timed out'}), 504
-        elif 'name or service not known' in error_msg.lower():
-            return jsonify({'error': 'Host not found'}), 502
-        elif '403' in error_msg or 'Forbidden' in error_msg:
-            return jsonify({'error': 'Access forbidden'}), 403
-        elif '404' in error_msg or 'Not Found' in error_msg:
-            return jsonify({'error': 'Resource not found'}), 404
-        else:
-            return jsonify({'error': error_msg}), 500
+        # Try fallback with requests
+        try:
+            fallback_headers = {
+                'User-Agent': USER_AGENT,
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+            }
+            fallback_response = requests.get(url, headers=fallback_headers, timeout=10)
+            fallback_response.raise_for_status()
+            text = fallback_response.text
+            
+            if use_cache:
+                proxy_cache.set(url, text)
+            
+            return text, 200, {'Content-Type': 'text/xml; charset=utf-8', 'X-Cache': 'MISS-FALLBACK'}
+        except Exception as fallback_error:
+            import traceback
+            error_msg = str(e)
+            fallback_msg = str(fallback_error)
+            print(f"Proxy error for {url}: {error_msg}")
+            print(f"Fallback also failed: {fallback_msg}")
+            
+            if 'CERTIFICATE' in error_msg or 'SSL' in error_msg or 'CERTIFICATE' in fallback_msg:
+                return jsonify({'error': 'SSL certificate error'}), 502
+            elif 'timed out' in error_msg.lower() or 'timed out' in fallback_msg.lower():
+                return jsonify({'error': 'Request timed out'}), 504
+            elif 'name or service not known' in error_msg.lower() or 'name or service not known' in fallback_msg.lower():
+                return jsonify({'error': 'Host not found'}), 502
+            elif '403' in error_msg or 'Forbidden' in error_msg:
+                return jsonify({'error': 'Access forbidden'}), 403
+            elif '404' in error_msg or 'Not Found' in error_msg:
+                return jsonify({'error': 'Resource not found'}), 404
+            else:
+                return jsonify({'error': f'Proxy error: {error_msg[:100]}'}), 500
 
 # Batch proxy for multiple URLs at once
 @app.route('/api/proxy/batch', methods=['POST'])
@@ -242,6 +365,7 @@ def cors_proxy_batch():
     
     def fetch_url(url):
         try:
+            import requests
             scraper = cloudscraper.create_scraper()
             
             if 'lbcgroup.tv' in url:
@@ -275,9 +399,20 @@ def cors_proxy_batch():
             return url, text, None
             
         except Exception as e:
-            error_msg = str(e)
-            print(f"Batch proxy error for {url}: {error_msg}")
-            return url, None, error_msg
+            # Try fallback with requests
+            try:
+                import requests
+                fallback_resp = requests.get(url, headers={'User-Agent': USER_AGENT, 'Accept': 'application/rss+xml, application/xml, text/xml, */*'}, timeout=8)
+                fallback_resp.raise_for_status()
+                text = fallback_resp.text
+                proxy_cache.set(url, text)
+                return url, text, None
+            except Exception as fallback_error:
+                error_msg = str(e)
+                fallback_msg = str(fallback_error)
+                print(f"Batch proxy error for {url}: {error_msg}")
+                print(f"Batch fallback also failed: {fallback_msg}")
+                return url, None, error_msg
     
     # Fetch all URLs in parallel
     with ThreadPoolExecutor(max_workers=20) as executor:
@@ -296,7 +431,11 @@ def cors_proxy_batch():
 
 @app.route('/api/photos')
 def get_photos():
-    return jsonify([])
+    try:
+        return jsonify([])
+    except Exception as e:
+        print(f"Error in /api/photos: {e}")
+        return jsonify([]), 200
 
 @app.route('/api/profile')
 def get_profile():
@@ -418,17 +557,61 @@ def delete_flexpic():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username', '')
-    password = data.get('password', '')
-    
-    cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
-    if cursor.fetchone():
-        return jsonify({'success': True, 'username': username})
-    
-    cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-    conn.commit()
-    return jsonify({'success': True, 'username': username})
+    try:
+        if not rate_limiter.is_allowed(request.remote_addr):
+            return jsonify({'error': 'Too many requests'}), 429
+        
+        data = request.json
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        
+        if not username or not password:
+            return jsonify({'error': 'Invalid credentials'}), 400
+        
+        cursor.execute('SELECT password FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        
+        # Check if user exists and verify password
+        if row:
+            stored_hash = row[0]
+            # Try hashed password verification first
+            if verify_password(password, stored_hash):
+                token = sessions.create_session(username)
+                return jsonify({'success': True, 'username': username, 'token': token})
+            # Fallback: plain text password (legacy support)
+            if stored_hash == password:
+                # Migrate to hashed password
+                new_hash = hash_password(password)
+                cursor.execute('UPDATE users SET password = ? WHERE username = ?', (new_hash, username))
+                conn.commit()
+                token = sessions.create_session(username)
+                return jsonify({'success': True, 'username': username, 'token': token})
+            # Wrong password
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # New user - create account
+        password_hash = hash_password(password)
+        cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password_hash))
+        conn.commit()
+        token = sessions.create_session(username)
+        return jsonify({'success': True, 'username': username, 'token': token})
+    except Exception as e:
+        print(f"Error in /api/login: {e}")
+        return jsonify({'error': 'Server error'}), 500
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    sessions.destroy_session(token)
+    return jsonify({'success': True})
+
+@app.route('/api/session', methods=['GET'])
+def check_session():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    username = sessions.validate_session(token)
+    if username:
+        return jsonify({'valid': True, 'username': username})
+    return jsonify({'valid': False}), 401
 
 # Playlist API Routes
 @app.route('/api/playlists')
@@ -505,6 +688,44 @@ def remove_track_from_playlist(playlist_id, track_id):
     playlists_cursor.execute('DELETE FROM tracks WHERE id = ?', (track_id,))
     playlists_conn.commit()
     return jsonify({'success': True})
+
+@app.route('/api/flexpics/export')
+def export_flexpics():
+    username = request.args.get('username', '').lower()
+    format = request.args.get('format', 'json')
+    
+    if username:
+        flexpics_cursor.execute('SELECT * FROM flexpics WHERE LOWER(username) = ?', (username,))
+    else:
+        flexpics_cursor.execute('SELECT * FROM flexpics')
+    
+    rows = flexpics_cursor.fetchall()
+    
+    if format == 'csv':
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'username', 'photo_url', 'registration', 'airline', 'aircraft_type', 'date', 'hashtags'])
+        for row in rows:
+            writer.writerow([
+                row[0], row[1], row[2], row[4], row[5], row[6], row[7], row[10]
+            ])
+        return output.getvalue(), 200, {'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=flexpics.csv'}
+    
+    flexpics = []
+    for row in rows:
+        flexpics.append({
+            'id': row[0],
+            'username': row[1],
+            'photo_url': row[2],
+            'photo_registration': row[4],
+            'photo_airline': row[5],
+            'photo_aircraft_type': row[6],
+            'photo_date': row[7],
+            'hashtags': row[10]
+        })
+    return jsonify(flexpics)
 
 # Serve static files
 @app.route('/')

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "python server.py",
+    "server": "npx tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -19,6 +20,7 @@
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.8.0",
     "clsx": "^2.1.1",
+    "cloudscraper": "^1.7.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.22.1",
@@ -35,6 +37,7 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@types/express": "^4.17.25",
     "@types/node": "^22.19.17",
     "autoprefixer": "^10.4.21",

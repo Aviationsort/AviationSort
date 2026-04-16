@@ -12,6 +12,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspens
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
+import { session, sanitizeInput } from './lib/encryption';
+
 import {
   Plane,
   Newspaper,
@@ -70,7 +72,12 @@ import {
   Plus,
   Trash2,
   Upload,
-  Youtube
+  Youtube,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  FolderPlus,
+  Lock
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { fetchAviationNews, fetchWorldNews, AVIATION_RSS_URLS, WORLD_NEWS_URLS, NewsItem, NewsSource } from './lib/rss';
@@ -330,7 +337,7 @@ const AeroButton = ({
   className,
   disabled
 }: { 
-  children: React.ReactNode; 
+  children?: React.ReactNode; 
   variant?: 'red' | 'black' | 'grey'; 
   onClick?: () => void;
   className?: string;
@@ -651,18 +658,27 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
     setLoading(true);
     setError('');
 
+    const safeUsername = sanitizeInput(username);
+    if (!safeUsername) {
+      setError('Invalid username');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const endpoint = isSignup ? '/api/signup' : '/api/login';
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username: safeUsername, password })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        onLogin(username);
+        if (data.token) {
+          session.setToken(data.token);
+        }
+        onLogin(safeUsername);
         onClose();
       } else {
         setError(data.message || data.error || 'Authentication failed');
@@ -698,8 +714,10 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] text-white/40 uppercase font-bold">Username</label>
+                <label htmlFor="auth-username" className="text-[10px] text-white/40 uppercase font-bold">Username</label>
                 <input
+                  id="auth-username"
+                  name="username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -708,8 +726,10 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] text-white/40 uppercase font-bold">Password</label>
+                <label htmlFor="auth-password" className="text-[10px] text-white/40 uppercase font-bold">Password</label>
                 <input
+                  id="auth-password"
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -783,14 +803,32 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showNewPlaylistModal, setShowNewPlaylistModal] = useState(false);
+  const [showQueueModal, setShowQueueModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [trackTitle, setTrackTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<'off' | 'one' | 'all'>('off');
+  const [originalOrder, setOriginalOrder] = useState<number[]>([]);
+  const [isHold, setIsHold] = useState(false);
+  const [eqHeights, setEqHeights] = useState<number[]>(Array(8).fill(4));
+  const [guiStyle, setGuiStyle] = useState<'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566'>('sw950');
   const audioRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentTrack = tracks[currentTrackIndex];
+
+  const toggleHold = () => {
+    setIsHold(!isHold);
+  };
+
+  useEffect(() => {
+    if (isHold && audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [isHold]);
 
   useEffect(() => {
     fetchPlaylists();
@@ -812,7 +850,53 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
     }
   }, [isPlaying, currentTrack]);
 
-  const fetchPlaylists = async () => {
+  useEffect(() => {
+    if (!isPlaying) {
+      setEqHeights(Array(8).fill(4));
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setEqHeights(Array(8).fill(0).map(() => 20 + Math.random() * 40));
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, [isPlaying]);
+
+  // Keyboard controls for music player
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          currentTrack && setIsPlaying(!isPlaying);
+          break;
+        case 'ArrowRight':
+          playNext();
+          break;
+        case 'ArrowLeft':
+          playPrev();
+          break;
+        case 'm':
+          toggleMute();
+          break;
+        case 's':
+          toggleShuffle();
+          break;
+        case 'r':
+          toggleRepeat();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, currentTrack]);
+
+  // Optimized handlers with useCallback
+  const fetchPlaylists = useCallback(async () => {
     try {
       const res = await fetch('/api/playlists');
       const data = await res.json();
@@ -820,7 +904,7 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
     } catch (err) {
       console.error('Failed to fetch playlists:', err);
     }
-  };
+  }, []);
 
   const fetchTracks = async (playlistId: number) => {
     try {
@@ -955,6 +1039,16 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
     }
   };
 
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const newTime = percentage * duration;
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     if (audioRef.current) {
@@ -984,16 +1078,88 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
     }
   };
 
+  const shuffleArray = (array: number[]) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  const toggleShuffle = () => {
+    if (!isShuffled) {
+      const indices = tracks.map((_, i) => i);
+      const shuffled = shuffleArray(indices);
+      setOriginalOrder(indices);
+      const currentPos = shuffled.indexOf(currentTrackIndex);
+      shuffled.splice(currentPos, 1);
+      shuffled.unshift(currentTrackIndex);
+      setTracksOrder(shuffled);
+    } else {
+      setTracksOrder(originalOrder);
+    }
+    setIsShuffled(!isShuffled);
+  };
+
+  const [tracksOrder, setTracksOrder] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (tracks.length > 0) {
+      setTracksOrder(tracks.map((_, i) => i));
+      setOriginalOrder(tracks.map((_, i) => i));
+    }
+  }, [tracks]);
+
+  const getOrderedIndex = (index: number) => {
+    return tracksOrder[index];
+  };
+
   const playNext = () => {
-    if (currentTrackIndex < tracks.length - 1) {
-      setCurrentTrackIndex(currentTrackIndex + 1);
+    if (tracksOrder.length === 0) return;
+    
+    const currentPosInOrder = tracksOrder.indexOf(currentTrackIndex);
+    
+    if (repeatMode === 'one') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(console.error);
+      }
+      return;
+    }
+    
+    if (currentPosInOrder < tracksOrder.length - 1) {
+      setCurrentTrackIndex(tracksOrder[currentPosInOrder + 1]);
+    } else if (repeatMode === 'all') {
+      setCurrentTrackIndex(tracksOrder[0]);
     }
   };
 
   const playPrev = () => {
-    if (currentTrackIndex > 0) {
-      setCurrentTrackIndex(currentTrackIndex - 1);
+    if (tracksOrder.length === 0) return;
+    
+    const currentPosInOrder = tracksOrder.indexOf(currentTrackIndex);
+    
+    if (currentTime > 3) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+      }
+      return;
     }
+    
+    if (currentPosInOrder > 0) {
+      setCurrentTrackIndex(tracksOrder[currentPosInOrder - 1]);
+    } else if (repeatMode === 'all') {
+      setCurrentTrackIndex(tracksOrder[tracksOrder.length - 1]);
+    }
+  };
+
+  const toggleRepeat = () => {
+    setRepeatMode(prev => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
   };
 
   const getEmbedUrl = (url: string) => {
@@ -1004,28 +1170,65 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
     return url;
   };
 
-  return (
+return (
     <motion.div
       key="music"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="h-full flex flex-col items-center gap-4 overflow-auto py-2"
+      className="h-full flex flex-col items-center gap-6 overflow-auto py-4 px-4"
     >
-      {/* Panasonic SL-SW950 Body */}
-      <div className="sw-player-wrapper">
+      {/* GUI Style Selector */}
+      <div className="flex gap-2 mb-2 flex-wrap justify-center">
+        <button
+          onClick={() => setGuiStyle('sw950')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${guiStyle === 'sw950' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+        >
+          SW-950
+        </button>
+        <button
+          onClick={() => setGuiStyle('de330')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${guiStyle === 'de330' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+        >
+          D-E330
+        </button>
+        <button
+          onClick={() => setGuiStyle('d145')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${guiStyle === 'd145' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+        >
+          D-145
+        </button>
+        <button
+          onClick={() => setGuiStyle('exp3361')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${guiStyle === 'exp3361' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+        >
+          EXP3361
+        </button>
+        <button
+          onClick={() => setGuiStyle('cd566')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${guiStyle === 'cd566' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+        >
+          CD-566
+        </button>
+      </div>
+
+      {guiStyle === 'sw950' ? (
+        /* Panasonic SL-SW950 Shockwave Portable CD Player */
+        <div className="sw-player-outer">
+        {/* Rubber fins around edge */}
+        <div className="sw-rubber-fins" />
+        
         <div className="sw-body">
-          <div className="sw-rubber-fins" />
           <div className="sw-lid">
             <div className="sw-brick-texture" />
             
-            {/* Header */}
+            {/* Top Section - Branding */}
             <div className="sw-branding">
-              <h3 className="sw-panasonic">PANASONIC</h3>
+              <span className="sw-panasonic">PANASONIC</span>
               <p className="sw-model">SL-SW950</p>
             </div>
 
-            {/* Logo */}
+            {/* Logo Section */}
             <div className="sw-logo">SW</div>
             <div className="sw-shockwave-text">SHOCK WAVE</div>
 
@@ -1042,7 +1245,7 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
                   <div className={`sw-icon ${isPlaying ? 'active' : ''}`} title="Play" />
                   <div className="sw-icon" title="Pause" />
                   <div className="sw-icon" title="Stop" />
-                  <div className={`sw-icon sw-icon-green`} title="EQ" />
+                  <div className="sw-icon sw-icon-green" title="EQ" />
                 </div>
                 <div className="sw-battery">
                   <div className="sw-battery-level filled" />
@@ -1052,9 +1255,7 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
               </div>
               <div className="sw-track-display">
                 {currentTrack ? (
-                  <>
-                    {String(currentTrackIndex + 1).padStart(2, '0')}
-                  </>
+                  <span>{String(currentTrackIndex + 1).padStart(2, '0')}</span>
                 ) : (
                   <span>--</span>
                 )}
@@ -1064,271 +1265,771 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
               </div>
             </div>
 
-            {/* Video Player Area */}
-            <div className="sw-video-area">
-              {currentTrack ? (
-                currentTrack.source === 'youtube' ? (
-                  <iframe
-                    src={getEmbedUrl(currentTrack.url)}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : (
-                  <video
-                    ref={audioRef}
-                    src={currentTrack.url}
-                    className="w-full h-full object-contain"
-                    onTimeUpdate={handleTimeUpdate}
-                    onEnded={playNext}
-                    onLoadedMetadata={() => {
-                      if (audioRef.current) {
-                        setDuration(audioRef.current.duration);
-                      }
-                    }}
-                  />
-                )
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Music className="w-6 h-6 text-gray-600" />
+            {/* CD Disc Area */}
+            <div className="sw-disc-area">
+              <div className={`sw-disc ${isPlaying ? 'spinning' : ''}`}>
+                <div className="sw-disc-center" />
+                <div className="sw-disc-label">
+                  <span>AVIATIONSORT</span>
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* EQ Display */}
+            <div className="sw-eq-section">
+              <span className="sw-eq-label">EQ</span>
+              <div className="sw-eq-bars">
+                {eqHeights.map((height, i) => (
+                  <div 
+                    key={i} 
+                    className={`sw-eq-bar ${isPlaying ? 'active' : ''}`}
+                    style={{ height: `${isPlaying ? height : 4}px` }}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full px-2">
+            <div className="sw-progress-section" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
               <div className="sw-progress">
                 <div 
                   className="sw-progress-fill"
                   style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
                 />
               </div>
-              <div className="sw-time-row">
+              <div className="sw-progress-times">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
             </div>
 
-            {/* EQ Display */}
-            <div className="sw-eq-bars">
-              {[...Array(8)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`sw-eq-bar ${isPlaying ? 'active' : ''}`}
-                  style={{ height: isPlaying ? `${20 + Math.random() * 30}%` : '4px' }}
-                />
-              ))}
-            </div>
-
             {/* Control Buttons */}
-            <div className="sw-buttons">
-              <button onClick={playPrev} className="sw-btn sw-btn-prev" title="Previous">
-                <SkipBack className="w-3 h-3" />
+            <div className="sw-buttons-row">
+              <button 
+                onClick={toggleShuffle} 
+                className={`sw-btn-grey ${isShuffled ? 'active' : ''}`}
+                title="Shuffle"
+              >
+                <span className="sw-btn-label">MEMORY</span>
               </button>
               <button 
-                onClick={() => setIsPlaying(!isPlaying)} 
-                className={`sw-btn sw-btn-play ${isPlaying ? 'active' : ''}`}
+                className="sw-btn-grey"
+                title="Mode"
+              >
+                <span className="sw-btn-label">MODE</span>
+              </button>
+              <button 
+                className="sw-btn-green"
+                title="EQ"
+              >
+                <span className="sw-btn-label">EQ</span>
+              </button>
+            </div>
+            
+            <div className="sw-main-controls">
+              <button onClick={playPrev} className="sw-nav-btn" title="Previous">
+                <SkipBack className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                className={`sw-play-btn ${isPlaying ? 'playing' : ''}`}
                 disabled={!currentTrack}
               >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
               </button>
-              <button onClick={playNext} className="sw-btn sw-btn-next" title="Next">
-                <SkipForward className="w-3 h-3" />
+              <button onClick={playNext} className="sw-nav-btn" title="Next">
+                <SkipForward className="w-4 h-4" />
               </button>
-              <button className="sw-btn sw-btn-stop" title="Stop">
-                <Square className="w-3 h-3" />
+              <button 
+                onClick={toggleRepeat}
+                className={`sw-btn-grey ${repeatMode !== 'off' ? 'active' : ''}`}
+                title={`Repeat: ${repeatMode}`}
+              >
+                <span className="sw-btn-label">{repeatMode === 'one' ? '1' : 'R'}</span>
               </button>
-              <button className="sw-btn sw-btn-mode" title="Mode">M</button>
-              <button className="sw-btn sw-btn-eq" title="EQ">EQ</button>
-              <button className="sw-btn sw-btn-recall" title="Memory">M</button>
             </div>
 
-            {/* Hold Switch */}
-            <div className="sw-hold-switch">
-              <span className="sw-hold-label">HOLD</span>
-              <div className="sw-hold-toggle" title="Hold switch" />
-            </div>
+            {/* Bottom Section */}
+            <div className="sw-bottom-section">
+              {/* Volume */}
+              <div className="sw-volume-section">
+                <span className="sw-vol-label">VOL</span>
+                <div className="sw-volume-control">
+                  <button onClick={toggleMute} className="sw-vol-btn">
+                    {isMuted || volume === 0 ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                    className="sw-vol-slider"
+                  />
+                </div>
+              </div>
 
-            {/* Volume Control */}
-            <div className="sw-volume">
-              <span className="sw-vol-label">-</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="sw-vol-slider"
-              />
-              <span className="sw-vol-label">+</span>
-            </div>
-
-            {/* ESP Indicator */}
-            <div className="sw-esp">
-              <span className="sw-esp-label">ESP</span>
-              <span className="sw-esp-value">48-SKIP</span>
-              <div className="sw-esp-bar">
-                <div className="sw-esp-fill" style={{ width: isPlaying ? '80%' : '20%' }} />
+              {/* Hold & Queue */}
+              <div className="sw-extras-section">
+                <div className="sw-hold-switch" onClick={toggleHold} style={{ cursor: 'pointer' }}>
+                  <span className="sw-hold-label">HOLD</span>
+                  <div className={`sw-hold-toggle ${isHold ? 'active' : ''}`} />
+                </div>
+                <button 
+                  onClick={() => setShowQueueModal(true)}
+                  className="sw-extra-btn"
+                  title="Queue"
+                >
+                  <List className="w-3 h-3" />
+                </button>
               </div>
             </div>
 
             {/* Open Latch */}
-            <div className="sw-latch">
+            <div className="sw-latch" onClick={() => setShowAddModal(true)} style={{ cursor: 'pointer' }}>
               <span className="sw-latch-text">OPEN</span>
+            </div>
+
+            {/* VMSS & Labels */}
+            <div className="sw-feature-labels">
+              <span className="sw-vmss">VMSS</span>
+              <span className="sw-antishock">48 SEC</span>
+              <span className="sw-licensed">LICENSED</span>
             </div>
           </div>
         </div>
       </div>
+      ) : guiStyle === 'de330' ? (
+        /* Sony D-E330 CD Walkman Style */
+        <div className="de330-player-outer">
+          <div className="de330-body">
+            <div className="de330-lid">
+              {/* Top Branding */}
+              <div className="de330-brand">
+                <span className="de330-sony">SONY</span>
+                <span className="de330-model">D-E330</span>
+              </div>
 
-      {/* Playlists and Tracks */}
-      <div className="sw-player-lists">
-        <div className="sw-playlist-panel">
-          <div className="flex items-center justify-between mb-2">
-            <span className="sw-panel-header" style={{marginBottom: 0}}>{t.playlists}</span>
-            <button 
-              onClick={() => setShowNewPlaylistModal(true)}
-              className="p-1 hover:bg-gray-300 rounded"
-            >
-              <Plus className="w-3 h-3 text-gray-600" />
-            </button>
-          </div>
-          
-          <div className="space-y-1">
-            {playlists.length === 0 ? (
-              <p className="sw-empty">{t.noPlaylists}</p>
-            ) : (
-              playlists.map(playlist => (
-                <div
-                  key={playlist.id}
-                  className={`sw-track-item ${selectedPlaylist?.id === playlist.id ? 'active' : ''}`}
-                  onClick={() => setSelectedPlaylist(playlist)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="sw-track-title">{playlist.name}</p>
-                      <p className="sw-track-meta">{(new Date(playlist.created_at)).toLocaleDateString()}</p>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deletePlaylist(playlist.id);
-                      }}
-                      className="p-1 hover:bg-gray-300 rounded ml-2"
-                    >
-                      <Trash2 className="w-3 h-3 text-gray-500" />
-                    </button>
+              {/* LCD Display */}
+              <div className="de330-lcd">
+                <div className="de330-lcd-top">
+                  <span className="de330-status">{isPlaying ? 'PLAY' : isHold ? 'HOLD' : 'STOP'}</span>
+                  <div className="de330-battery">
+                    <div className="de330-bat-level filled" />
+                    <div className="de330-bat-level filled" />
+                    <div className="de330-bat-level" />
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+                <div className="de330-track-info">
+                  <span className="de330-track-num">
+                    {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+                  </span>
+                  <span className="de330-time">
+                    {currentTrack ? formatTime(currentTime) : '--:--'}
+                  </span>
+                </div>
+                <div className="de330-disc-info">
+                  <span>{isShuffled ? 'SHUFFLE' : repeatMode !== 'off' ? `REPEAT ${repeatMode === 'one' ? '1' : 'ALL'}` : 'NORMAL'}</span>
+                </div>
+              </div>
 
-        <div className="sw-playlist-panel">
-          <span className="sw-panel-header">
-            {selectedPlaylist ? selectedPlaylist.name : t.noPlaylists}
-          </span>
-          
-          <div className="space-y-1">
-            {!selectedPlaylist ? (
-              <p className="sw-empty">{t.createFirstPlaylist}</p>
-            ) : tracks.length === 0 ? (
-              <p className="sw-empty">{t.noTracks}</p>
-            ) : (
-              tracks.map((track, index) => (
-                <div
-                  key={track.id}
-                  className={`sw-track-item ${currentTrackIndex === index && currentTrack?.id === track.id ? 'active' : ''}`}
-                  onClick={() => setCurrentTrackIndex(index)}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-300 rounded flex items-center justify-center border border-gray-500">
-                      {track.source === 'youtube' ? (
-                        <Youtube className="w-3 h-3 text-blue-700" />
-                      ) : (
-                        <Music className="w-3 h-3 text-gray-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="sw-track-title">{track.title}</p>
-                      <p className="sw-track-meta">{track.source}</p>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTrack(track.id);
-                      }}
-                      className="p-1 hover:bg-gray-300 rounded"
-                    >
-                      <Trash2 className="w-3 h-3 text-gray-500" />
-                    </button>
+              {/* Disc Area */}
+              <div className="de330-disc-area">
+                <div className={`de330-disc ${isPlaying ? 'spinning' : ''}`}>
+                  <div className="de330-disc-center" />
+                  <div className="de330-disc-label">
+                    <span>AVIATIONSORT</span>
                   </div>
                 </div>
-              ))
-            )}
+              </div>
+
+              {/* EQ */}
+              <div className="de330-eq">
+                {eqHeights.map((height, i) => (
+                  <div 
+                    key={i} 
+                    className={`de330-eq-bar ${isPlaying ? 'active' : ''}`}
+                    style={{ height: `${isPlaying ? height : 4}px` }}
+                  />
+                ))}
+              </div>
+
+              {/* Progress */}
+              <div className="de330-progress" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
+                <div className="de330-progress-bar">
+                  <div 
+                    className="de330-progress-fill"
+                    style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+                  />
+                </div>
+                <div className="de330-progress-time">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="de330-controls">
+                <button onClick={toggleShuffle} className={`de330-btn-grey ${isShuffled ? 'active' : ''}`}>
+                  <span>SHUFFLE</span>
+                </button>
+                <div className="de330-nav-btns">
+                  <button onClick={playPrev} className="de330-nav-btn">
+                    <SkipBack className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                    className={`de330-play-btn ${isPlaying ? 'playing' : ''}`}
+                    disabled={!currentTrack}
+                  >
+                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                  </button>
+                  <button onClick={playNext} className="de330-nav-btn">
+                    <SkipForward className="w-4 h-4" />
+                  </button>
+                </div>
+                <button onClick={toggleRepeat} className={`de330-btn-grey ${repeatMode !== 'off' ? 'active' : ''}`}>
+                  <span>{repeatMode === 'one' ? '1' : 'ALL'}</span>
+                </button>
+              </div>
+
+              {/* Volume & Extras */}
+              <div className="de330-bottom">
+                <div className="de330-volume">
+                  <button onClick={toggleMute} className="de330-vol-btn">
+                    {isMuted || volume === 0 ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                    className="de330-vol-slider"
+                  />
+                </div>
+                <div className="de330-extras">
+                  <div className="de330-hold" onClick={toggleHold} style={{ cursor: 'pointer' }}>
+                    <span>HOLD</span>
+                    <div className={`de330-hold-switch ${isHold ? 'active' : ''}`} />
+                  </div>
+                  <button onClick={() => setShowQueueModal(true)} className="de330-queue-btn">
+                    <List className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Open Button */}
+              <div className="de330-open" onClick={() => setShowAddModal(true)} style={{ cursor: 'pointer' }}>
+                <span>OPEN</span>
+              </div>
+            </div>
           </div>
-
-          {selectedPlaylist && (
-            <button 
-              onClick={() => setShowAddModal(true)} 
-              className="mt-2 w-full py-1 px-2 bg-gray-200 border border-gray-400 rounded text-xs font-bold text-gray-600 hover:bg-gray-300"
-            >
-              + {t.addTrack}
-            </button>
-          )}
         </div>
-      </div>
+      ) : guiStyle === 'd145' ? (
+        /* Sony Discman D-145 Style */
+        <div className="d145-player-outer">
+          <div className="d145-body">
+            <div className="d145-lid">
+              {/* Brand */}
+              <div className="d145-brand">
+                <span className="d145-sony">SONY</span>
+                <span className="d145-model">Discman</span>
+              </div>
 
-      {/* New Playlist Modal */}
-      {showNewPlaylistModal && (
-        <div className="sw-modal-overlay" onClick={() => setShowNewPlaylistModal(false)}>
-          <div className="sw-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="sw-modal-title">{t.createPlaylist}</h3>
-            <input
-              type="text"
-              value={newPlaylistName}
-              onChange={(e) => setNewPlaylistName(e.target.value)}
-              placeholder={t.playlists}
-              className="sw-input"
-            />
-            <div className="sw-modal-btns">
-              <button 
-                onClick={createPlaylist}
-                className="sw-modal-btn sw-btn-primary"
-              >
-                {t.createPlaylist}
+              {/* LCD */}
+              <div className="d145-lcd">
+                <div className="d145-lcd-display">
+                  {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+                </div>
+                <div className="d145-time-display">
+                  {currentTrack ? formatTime(currentTime) : '--:--'}
+                </div>
+              </div>
+
+              {/* Disc */}
+              <div className="d145-disc-area">
+                <div className={`d145-disc ${isPlaying ? 'spinning' : ''}`}>
+                  <div className="d145-disc-center" />
+                </div>
+              </div>
+
+              {/* EQ */}
+              <div className="d145-eq">
+                {eqHeights.map((height, i) => (
+                  <div 
+                    key={i} 
+                    className={`d145-eq-bar ${isPlaying ? 'active' : ''}`}
+                    style={{ height: `${isPlaying ? height : 3}px` }}
+                  />
+                ))}
+              </div>
+
+              {/* Progress */}
+              <div className="d145-progress" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
+                <div className="d145-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+              </div>
+
+              {/* Controls */}
+              <div className="d145-controls">
+                <button onClick={playPrev} className="d145-btn">
+                  <SkipBack className="w-3 h-3" />
+                </button>
+                <button 
+                  onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                  className={`d145-play-btn ${isPlaying ? 'playing' : ''}`}
+                  disabled={!currentTrack}
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+                <button onClick={playNext} className="d145-btn">
+                  <SkipForward className="w-3 h-3" />
+                </button>
+                <button onClick={toggleRepeat} className={`d145-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
+                  <span>{repeatMode === 'one' ? '1' : 'R'}</span>
+                </button>
+              </div>
+
+              {/* Volume */}
+              <div className="d145-volume">
+                <button onClick={toggleMute} className="d145-vol-btn">
+                  {isMuted || volume === 0 ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="d145-vol-slider"
+                />
+              </div>
+
+              {/* Hold & Open */}
+              <div className="d145-extras">
+                <div className="d145-hold" onClick={toggleHold} style={{ cursor: 'pointer' }}>
+                  <div className={`d145-hold-toggle ${isHold ? 'active' : ''}`} />
+                </div>
+                <button onClick={() => setShowAddModal(true)} className="d145-open-btn">
+                  <span>OPEN</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Philips EXP3361/01 Style */
+        <div className="exp3361-player-outer">
+          <div className="exp3361-body">
+            <div className="exp3361-lid">
+              {/* Brand */}
+              <div className="exp3361-brand">
+                <span className="exp3361-philips">Philips</span>
+                <span className="exp3361-model">EXP3361</span>
+              </div>
+
+              {/* LCD */}
+              <div className="exp3361-lcd">
+                <div className="exp3361-track-display">
+                  {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+                </div>
+                <div className="exp3361-time">
+                  {currentTrack ? formatTime(currentTime) : '--:--'}
+                </div>
+              </div>
+
+              {/* Disc */}
+              <div className="exp3361-disc-area">
+                <div className={`exp3361-disc ${isPlaying ? 'spinning' : ''}`}>
+                  <div className="exp3361-disc-center" />
+                  <div className="exp3361-disc-label">
+                    <span>AVIATIONSORT</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* EQ */}
+              <div className="exp3361-eq">
+                {eqHeights.map((height, i) => (
+                  <div 
+                    key={i} 
+                    className={`exp3361-eq-bar ${isPlaying ? 'active' : ''}`}
+                    style={{ height: `${isPlaying ? height : 4}px` }}
+                  />
+                ))}
+              </div>
+
+              {/* Progress */}
+              <div className="exp3361-progress" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
+                <div className="exp3361-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+              </div>
+
+              {/* Controls */}
+              <div className="exp3361-controls">
+                <button onClick={toggleShuffle} className={`exp3361-btn ${isShuffled ? 'active' : ''}`}>
+                  <span>SHUF</span>
+                </button>
+                <button onClick={playPrev} className="exp3361-nav">
+                  <SkipBack className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                  className={`exp3361-play ${isPlaying ? 'playing' : ''}`}
+                  disabled={!currentTrack}
+                >
+                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                </button>
+                <button onClick={playNext} className="exp3361-nav">
+                  <SkipForward className="w-4 h-4" />
+                </button>
+                <button onClick={toggleRepeat} className={`exp3361-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
+                  <span>{repeatMode === 'one' ? '1' : 'RPT'}</span>
+                </button>
+              </div>
+
+              {/* Volume */}
+              <div className="exp3361-volume">
+                <button onClick={toggleMute} className="exp3361-vol-btn">
+                  {isMuted || volume === 0 ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="exp3361-vol-slider"
+                />
+              </div>
+
+              {/* Extras */}
+              <div className="exp3361-extras">
+                <button onClick={() => setShowQueueModal(true)} className="exp3361-queue">
+                  <List className="w-3 h-3" />
+                </button>
+                <div className="exp3361-hold" onClick={toggleHold} style={{ cursor: 'pointer' }}>
+                  <span>HOLD</span>
+                  <div className={`exp3361-hold-led ${isHold ? 'on' : ''}`} />
+                </div>
+              </div>
+
+              {/* Open */}
+              <button onClick={() => setShowAddModal(true)} className="exp3361-open" style={{ cursor: 'pointer' }}>
+                <span>OPEN</span>
               </button>
-              <button 
-                onClick={() => setShowNewPlaylistModal(false)}
-                className="sw-modal-btn sw-btn-secondary"
-              >
-                {t.close}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Durabrand CD-566 Style */
+        <div className="cd566-player-outer">
+          <div className="cd566-body">
+            <div className="cd566-lid">
+              {/* Brand */}
+              <div className="cd566-brand">
+                <span className="cd566-durabrand">DURABRAND</span>
+                <span className="cd566-model">CD-566</span>
+              </div>
+
+              {/* LCD */}
+              <div className="cd566-lcd">
+                <div className="cd566-lcd-row">
+                  <span className="cd566-status">{isPlaying ? 'PLAY' : isHold ? 'HOLD' : 'STOP'}</span>
+                  <div className="cd566-battery">
+                    <div className="cd566-bat-level filled" />
+                    <div className="cd566-bat-level filled" />
+                    <div className="cd566-bat-level" />
+                  </div>
+                </div>
+                <div className="cd566-lcd-main">
+                  <span className="cd566-track">
+                    {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+                  </span>
+                  <span className="cd566-time">
+                    {currentTrack ? formatTime(currentTime) : '--:--'}
+                  </span>
+                </div>
+                <div className="cd566-lcd-bottom">
+                  <span>{isShuffled ? 'SHUFFLE' : repeatMode !== 'off' ? `REPEAT ${repeatMode === 'one' ? '1' : 'ALL'}` : 'NORMAL'}</span>
+                </div>
+              </div>
+
+              {/* Disc */}
+              <div className="cd566-disc-area">
+                <div className={`cd566-disc ${isPlaying ? 'spinning' : ''}`}>
+                  <div className="cd566-disc-inner">
+                    <div className="cd566-disc-center" />
+                    <div className="cd566-disc-label">
+                      <span>AVIATIONSORT</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* EQ */}
+              <div className="cd566-eq">
+                {eqHeights.map((height, i) => (
+                  <div 
+                    key={i} 
+                    className={`cd566-eq-bar ${isPlaying ? 'active' : ''}`}
+                    style={{ height: `${isPlaying ? height : 4}px` }}
+                  />
+                ))}
+              </div>
+
+              {/* Progress */}
+              <div className="cd566-progress" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
+                <div className="cd566-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+              </div>
+
+              {/* Controls */}
+              <div className="cd566-controls">
+                <button onClick={toggleShuffle} className={`cd566-btn ${isShuffled ? 'active' : ''}`}>
+                  <span>SHUFFLE</span>
+                </button>
+                <button onClick={playPrev} className="cd566-nav">
+                  <SkipBack className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                  className={`cd566-play ${isPlaying ? 'playing' : ''}`}
+                  disabled={!currentTrack}
+                >
+                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                </button>
+                <button onClick={playNext} className="cd566-nav">
+                  <SkipForward className="w-4 h-4" />
+                </button>
+                <button onClick={toggleRepeat} className={`cd566-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
+                  <span>{repeatMode === 'one' ? '1' : 'REPEAT'}</span>
+                </button>
+              </div>
+
+              {/* Volume */}
+              <div className="cd566-volume">
+                <button onClick={toggleMute} className="cd566-vol-btn">
+                  {isMuted || volume === 0 ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="cd566-vol-slider"
+                />
+              </div>
+
+              {/* Extras */}
+              <div className="cd566-extras">
+                <div className="cd566-hold" onClick={toggleHold} style={{ cursor: 'pointer' }}>
+                  <span>HOLD</span>
+                  <div className={`cd566-hold-led ${isHold ? 'on' : ''}`} />
+                </div>
+                <button onClick={() => setShowQueueModal(true)} className="cd566-queue">
+                  <List className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Open */}
+              <button onClick={() => setShowAddModal(true)} className="cd566-open" style={{ cursor: 'pointer' }}>
+                <span>OPEN</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Playlists and Tracks */}
+      <div className="w-full max-w-md space-y-4">
+        <div className="aero-container rounded-[2rem] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-black italic uppercase text-white/60">{t.playlists}</span>
+            <button 
+              onClick={() => setShowNewPlaylistModal(true)}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            {playlists.length === 0 ? (
+              <p className="text-xs text-white/30 text-center py-4">{t.noPlaylists}</p>
+            ) : (
+              playlists.map(playlist => (
+                <div
+                  key={playlist.id}
+                  className={`p-3 rounded-xl cursor-pointer transition-all ${selectedPlaylist?.id === playlist.id ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setSelectedPlaylist(playlist)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/30 to-red-900/30 flex items-center justify-center">
+                        <Music className="w-4 h-4 text-red-500/60" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold truncate">{playlist.name}</p>
+                        <p className="text-[10px] text-white/30">{(new Date(playlist.created_at)).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deletePlaylist(playlist.id);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-3 h-3 text-white/40 hover:text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Tracks Panel */}
+        <div className="aero-container rounded-[2rem] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-black italic uppercase text-white/60">
+              {selectedPlaylist ? selectedPlaylist.name : t.noPlaylists}
+            </span>
+            {selectedPlaylist && (
+              <button 
+                onClick={() => setShowAddModal(true)} 
+                className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 transition-colors"
+              >
+                <Plus className="w-4 h-4 text-red-500" />
+              </button>
+            )}
+          </div>
+          
+          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
+            {!selectedPlaylist ? (
+              <p className="text-xs text-white/30 text-center py-4">{t.createFirstPlaylist}</p>
+            ) : tracks.length === 0 ? (
+              <p className="text-xs text-white/30 text-center py-4">{t.noTracks}</p>
+            ) : (
+              tracks.map((track, index) => (
+                <div
+                  key={track.id}
+                  className={`p-3 rounded-xl cursor-pointer transition-all group ${currentTrackIndex === index && currentTrack?.id === track.id ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => {
+                    setCurrentTrackIndex(index);
+                    setIsPlaying(true);
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/30 to-red-900/30 flex items-center justify-center shrink-0 overflow-hidden">
+                      {track.thumbnail ? (
+                        <img src={track.thumbnail} className="w-full h-full object-cover" />
+                      ) : track.source === 'youtube' ? (
+                        <Youtube className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <Music className="w-4 h-4 text-red-500/60" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">{track.title}</p>
+                      <p className="text-[10px] text-white/40 uppercase">{track.source}</p>
+                    </div>
+                    {currentTrackIndex === index && currentTrack?.id === track.id && isPlaying && (
+                      <div className="flex gap-0.5 items-center h-4">
+                        {[...Array(3)].map((_, i) => (
+                          <motion.div
+                            key={i}
+                            className="w-1 bg-red-500 rounded-full"
+                            animate={{ height: [4, 12, 8] }}
+                            transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.1 }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTrack(track.id);
+                      }}
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                    >
+                      <Trash2 className="w-3 h-3 text-white/40 hover:text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* New Playlist Modal */}
+      {showNewPlaylistModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowNewPlaylistModal(false)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-black italic uppercase">{t.createPlaylist}</h3>
+              <button onClick={() => setShowNewPlaylistModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              placeholder={t.playlists}
+              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors mb-4"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <AeroButton variant="black" className="flex-1" onClick={() => setShowNewPlaylistModal(false)}>
+                {t.close}
+              </AeroButton>
+              <AeroButton variant="red" className="flex-1" onClick={createPlaylist}>
+                {t.createPlaylist}
+              </AeroButton>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Add Track Modal */}
       {showAddModal && (
-        <div className="sw-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="sw-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="sw-modal-title">{t.addTrack}</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAddModal(false)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-black italic uppercase">{t.addTrack}</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <input
               type="text"
               value={trackTitle}
               onChange={(e) => setTrackTitle(e.target.value)}
               placeholder={t.trackTitle}
-              className="sw-input"
+              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors mb-4"
             />
             
-            <div className="mb-3">
-              <p className="text-xs text-gray-600 mb-2">{t.addLocalFile}</p>
+            <div className="mb-4">
+              <p className="text-xs text-white/40 mb-2 font-bold uppercase tracking-wider">{t.addLocalFile}</p>
               <button 
                 onClick={addLocalTrack}
-                className="w-full py-2 px-3 bg-gray-200 border border-gray-400 rounded text-xs font-bold text-gray-600 hover:bg-gray-300 flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-sm font-bold hover:bg-white/10 flex items-center justify-center gap-2 transition-colors"
               >
-                <Upload className="w-3 h-3" />
+                <Upload className="w-4 h-4" />
                 {t.addLocalFile}
               </button>
               <input
@@ -1340,36 +2041,86 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
               />
             </div>
             
-            <div className="mb-3">
-              <p className="text-xs text-gray-600 mb-2">{t.addFromYouTube}</p>
+            <div className="mb-4">
+              <p className="text-xs text-white/40 mb-2 font-bold uppercase tracking-wider">{t.addFromYouTube}</p>
               <input
                 type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 placeholder={t.enterYouTubeUrl}
-                className="sw-input"
+                className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors"
               />
               <button 
                 onClick={addYouTubeTrack}
                 disabled={!youtubeUrl.trim() || isLoading}
-                className="w-full py-2 px-3 bg-blue-700 border border-blue-900 rounded text-xs font-bold text-white hover:bg-blue-800 flex items-center justify-center gap-2"
+                className="w-full mt-2 py-3 px-4 bg-red-600/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-500 hover:bg-red-600/30 flex items-center justify-center gap-2 transition-colors"
               >
-                <Youtube className="w-3 h-3" />
-                {t.addFromYouTube}
+                <Youtube className="w-4 h-4" />
+                {isLoading ? t.adding : t.addFromYouTube}
               </button>
             </div>
             
-            <button 
-              onClick={() => {
-                setShowAddModal(false);
-                setTrackTitle('');
-                setYoutubeUrl('');
-              }}
-              className="sw-modal-btn sw-btn-secondary w-full"
-            >
+            <AeroButton variant="black" className="w-full" onClick={() => {
+              setShowAddModal(false);
+              setTrackTitle('');
+              setYoutubeUrl('');
+            }}>
               {t.close}
-            </button>
-          </div>
+            </AeroButton>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Queue Modal */}
+      {showQueueModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowQueueModal(false)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-black italic uppercase">Queue</h3>
+              <button onClick={() => setShowQueueModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 no-scrollbar">
+              {tracks.map((track, index) => (
+                <div
+                  key={track.id}
+                  className={`p-3 rounded-xl cursor-pointer transition-all ${currentTrackIndex === index ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => {
+                    setCurrentTrackIndex(index);
+                    setShowQueueModal(false);
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                      {isPlaying && currentTrackIndex === index ? (
+                        <motion.div 
+                          className="w-2 h-2 bg-red-500 rounded-full"
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ repeat: Infinity, duration: 0.5 }}
+                        />
+                      ) : (
+                        <span className="text-[10px] font-bold text-white/40">{index + 1}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">{track.title}</p>
+                      <p className="text-[10px] text-white/40 uppercase">{track.source}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <AeroButton variant="black" className="w-full mt-4" onClick={() => setShowQueueModal(false)}>
+              {t.close}
+            </AeroButton>
+          </motion.div>
         </div>
       )}
     </motion.div>
@@ -1533,6 +2284,7 @@ const TRANSLATIONS = {
     noPlaylists: "No playlists yet",
     noTracks: "No tracks in this playlist",
     createFirstPlaylist: "Create your first playlist",
+    adding: "Adding...",
     deletePlaylist: "Delete Playlist",
     deleteTrack: "Delete Track"
   },
@@ -5441,16 +6193,15 @@ const AeroWatch = ({ className, lang = 'en', style = 'analog', background = null
   const minutes = time.getMinutes();
   const hours = time.getHours();
   const utcTime = new Date(time.getTime() + time.getTimezoneOffset() * 60000);
-  const utcHours = utcTime.getHours();
+const utcHours = utcTime.getHours();
   const utcMinutes = utcTime.getMinutes();
 
   if (style === 'digital') {
-    const isVideo = background?.startsWith('blob:') || background?.endsWith('.mp4') || background?.endsWith('.webm');
     return (
       <div className={cn("relative w-64 h-32 md:w-96 md:h-48 bg-black border-[6px] md:border-[8px] border-[#1a1a1a] shadow-[0_20px_50px_rgba(0,0,0,0.9)] flex items-center justify-center overflow-hidden", className)}>
         {background && (
           <div className="absolute inset-0">
-            {isVideo ? (
+            {background.startsWith('blob:') || background.endsWith('.mp4') || background.endsWith('.webm') ? (
               <video src={background} className="w-full h-full object-cover opacity-30" autoPlay loop muted />
             ) : (
               <img src={background} className="w-full h-full object-cover opacity-30" alt="background" />
@@ -5641,6 +6392,9 @@ export default function App() {
   const [nearbyUsers, setNearbyUsers] = useState<Friend[]>([]);
   const [sortBy, setSortBy] = useState<'date' | 'registration' | 'airline'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [flexSearchQuery, setFlexSearchQuery] = useState('');
+  const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
+  const [showFlexModal, setShowFlexModal] = useState(false);
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const [reelHashtags, setReelHashtags] = useState<string[]>(['lhr', 'a380']);
   const [newHashtag, setNewHashtag] = useState('');
@@ -5693,8 +6447,8 @@ export default function App() {
   const [timerSeconds, setTimerSeconds] = useState(300);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerRemaining, setTimerRemaining] = useState(300);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const stopwatchRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopwatchRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (timerRunning && timerRemaining > 0) {
@@ -5745,36 +6499,53 @@ export default function App() {
     try {
       const profileRes = await fetch(`/api/profile?username=${username}`);
       if (profileRes.ok) {
-        const profileData = await profileRes.json();
-        setProfile({
-          displayName: profileData.displayName || 'Aviation Enthusiast',
-          bio: profileData.bio || 'Passionate plane spotter',
-          homeAirport: profileData.homeAirport || 'EGLL / LHR',
-          favoriteAirline: profileData.favoriteAirline || 'Emirates',
-          equipment: profileData.equipment || 'Sony A7R IV + 200-600mm',
-          isPrivate: profileData.isPrivate || false
-        });
+        const contentType = profileRes.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const profileData = await profileRes.json();
+          setProfile({
+            displayName: profileData.displayName || 'Aviation Enthusiast',
+            bio: profileData.bio || 'Passionate plane spotter',
+            homeAirport: profileData.homeAirport || 'EGLL / LHR',
+            favoriteAirline: profileData.favoriteAirline || 'Emirates',
+            equipment: profileData.equipment || 'Sony A7R IV + 200-600mm',
+            isPrivate: profileData.isPrivate || false
+          });
+        }
       }
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      // Silently fail - profile loading is optional
     }
 
-    // Load favorites
-    try {
-      const favoritesRes = await fetch(`/api/favorites?username=${username}`);
-      if (favoritesRes.ok) {
-        const favorites = await favoritesRes.json();
-        setPhotos(prev => prev.map(p => ({
-          ...p,
-          isFavorite: favorites.includes(p.registration)
-        })));
+    // Load favorites (only if logged in)
+    if (username) {
+      try {
+        const favoritesRes = await fetch(`/api/favorites?username=${username}`);
+        if (favoritesRes.ok) {
+          const contentType = favoritesRes.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const favorites = await favoritesRes.json();
+            setPhotos(prev => prev.map(p => ({
+              ...p,
+              isFavorite: favorites.includes(p.registration)
+            })));
+          }
+        }
+      } catch (err) {
+        // Silently fail - favorites require login
       }
-    } catch (err) {
-      console.error('Failed to load favorites:', err);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: await session.authHeader()
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    session.removeToken();
     setCurrentUser(null);
     setIsLoggedIn(false);
     setProfile({
@@ -5790,9 +6561,31 @@ export default function App() {
 
   // Check authentication on startup
   useEffect(() => {
-    if (!isLoggedIn) {
-      setIsAuthModalOpen(true);
-    }
+    const checkSession = async () => {
+      const token = session.getToken();
+      if (token) {
+        try {
+          const res = await fetch('/api/session', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.valid) {
+              setCurrentUser(data.username);
+              setIsLoggedIn(true);
+              return;
+            }
+          }
+          session.removeToken();
+        } catch (err) {
+          console.error('Session check failed:', err);
+        }
+      }
+      if (!isLoggedIn) {
+        setIsAuthModalOpen(true);
+      }
+    };
+    checkSession();
   }, [isLoggedIn]);
 
   // Initial Weather Fetch
@@ -6162,12 +6955,17 @@ export default function App() {
   const totalPages = Math.ceil(filteredPhotos.length / itemsPerPage);
 
   const paginatedFlexPics = useMemo(() => {
-    const safeSearch = searchQuery?.toLowerCase() || '';
-    const filtered = flexPics.filter(p => 
-      (p.registration || '').toLowerCase().includes(safeSearch) ||
-      (p.airline || '').toLowerCase().includes(safeSearch) ||
-      (p.aircraftType || '').toLowerCase().includes(safeSearch)
-    );
+    const safeSearch = flexSearchQuery?.toLowerCase() || '';
+    const filtered = flexPics.filter(p => {
+      const matchesSearch = 
+        (p.registration || '').toLowerCase().includes(safeSearch) ||
+        (p.airline || '').toLowerCase().includes(safeSearch) ||
+        (p.aircraftType || '').toLowerCase().includes(safeSearch);
+      const matchesHashtag = selectedHashtag 
+        ? (p.hashtags || []).includes(selectedHashtag)
+        : true;
+      return matchesSearch && matchesHashtag;
+    });
 
     const sorted = [...filtered].sort((a, b) => {
       let comparison = 0;
@@ -6179,7 +6977,7 @@ export default function App() {
 
     const start = (currentPage - 1) * itemsPerPage;
     return sorted.slice(start, start + itemsPerPage);
-  }, [flexPics, searchQuery, sortBy, sortOrder, currentPage, itemsPerPage]);
+  }, [flexPics, flexSearchQuery, selectedHashtag, sortBy, sortOrder, currentPage, itemsPerPage]);
 
   const totalFlexPages = Math.ceil(flexPics.length / itemsPerPage);
 
@@ -6826,6 +7624,8 @@ const newMessage = {
                       </div>
                       <div className="flex gap-2">
                         <input
+                          id="hashtag-input"
+                          name="hashtag"
                           type="text"
                           placeholder={t.addHashtag}
                           value={newHashtag}
@@ -6987,7 +7787,7 @@ const newMessage = {
                     </AeroButton>
                   </div>
 
-<div className="space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] scroll-smooth [-webkit-overflow-scrolling:touch]">
+                  <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] scroll-smooth [-webkit-overflow-scrolling:touch]">
                     {/* World News Progress - Simplified Frutiger Aero */}
                     {newsTab === 'world' && worldNewsLoading && (
                       <div className="flex items-center gap-3 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
@@ -7277,20 +8077,23 @@ const newMessage = {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-                        <div className="flex items-center gap-4 aero-glass px-4 py-2">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{t.show}: {itemsPerPage}</span>
-                          <input 
-                            type="range" 
-                            min="20" 
-                            max="100" 
-                            step="10"
-                            value={itemsPerPage}
+                        <div className="relative flex items-center gap-2 aero-glass px-3 py-2">
+                          <Search className="w-3 h-3 text-white/40" />
+                          <input
+                            type="text"
+                            value={flexSearchQuery}
                             onChange={(e) => {
-                              setItemsPerPage(parseInt(e.target.value));
+                              setFlexSearchQuery(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="aero-slider w-24 md:w-32"
+                            placeholder="Search..."
+                            className="bg-transparent text-[10px] font-black uppercase tracking-widest focus:outline-none w-20"
                           />
+                          {flexSearchQuery && (
+                            <button onClick={() => setFlexSearchQuery('')}>
+                              <X className="w-3 h-3 text-white/40" />
+                            </button>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 aero-glass px-3 py-1">
                           <Filter className="w-3 h-3 text-red-500" />
@@ -7312,6 +8115,49 @@ const newMessage = {
                         </div>
                       </div>
                     </div>
+
+                    {/* Hashtag Filter */}
+                    {flexPics.length > 0 && (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Filter:</span>
+                        <button
+                          onClick={() => setSelectedHashtag(null)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                            selectedHashtag === null 
+                              ? 'bg-red-500 text-white' 
+                              : 'bg-white/10 text-white/60 hover:bg-white/20'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {Array.from(new Set(flexPics.flatMap(p => p.hashtags || []))).slice(0, 10).map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => setSelectedHashtag(tag)}
+                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                              selectedHashtag === tag 
+                                ? 'bg-red-500 text-white' 
+                                : 'bg-white/10 text-white/60 hover:bg-white/20'
+                            }`}
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                        <div className="flex-1" />
+                        <button
+                          onClick={() => window.open('/api/flexpics/export?format=json', '_blank')}
+                          className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/10 text-white/60 hover:bg-white/20 flex items-center gap-1"
+                        >
+                          <Upload className="w-3 h-3" /> Export JSON
+                        </button>
+                        <button
+                          onClick={() => window.open('/api/flexpics/export?format=csv', '_blank')}
+                          className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/10 text-white/60 hover:bg-white/20 flex items-center gap-1"
+                        >
+                          <Upload className="w-3 h-3" /> Export CSV
+                        </button>
+                      </div>
+                    )}
 
                     {flexPics.length > 0 ? (
                       <>
@@ -7465,8 +8311,10 @@ const newMessage = {
                           </div>
                           <div className="space-y-4">
                             <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.displayName}</label>
+                              <label htmlFor="profile-displayname" className="text-[10px] text-white/40 uppercase font-bold">{t.displayName}</label>
                               <input 
+                                id="profile-displayname"
+                                name="displayName"
                                 type="text" 
                                 value={profile.displayName} 
                                 onChange={(e) => setProfile(prev => ({ ...prev, displayName: e.target.value }))}
@@ -7474,8 +8322,10 @@ const newMessage = {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.bio}</label>
+                              <label htmlFor="profile-bio" className="text-[10px] text-white/40 uppercase font-bold">{t.bio}</label>
                               <textarea 
+                                id="profile-bio"
+                                name="bio"
                                 value={profile.bio} 
                                 onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
                                 className="aero-input w-full h-24 resize-none" 
@@ -7491,8 +8341,10 @@ const newMessage = {
                           </div>
                           <div className="space-y-4">
                             <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.homeAirport}</label>
+                              <label htmlFor="profile-homeairport" className="text-[10px] text-white/40 uppercase font-bold">{t.homeAirport}</label>
                               <input 
+                                id="profile-homeairport"
+                                name="homeAirport"
                                 type="text" 
                                 value={profile.homeAirport} 
                                 onChange={(e) => setProfile(prev => ({ ...prev, homeAirport: e.target.value }))}
@@ -7500,8 +8352,10 @@ const newMessage = {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.favoriteAirline}</label>
+                              <label htmlFor="profile-favoriteairline" className="text-[10px] text-white/40 uppercase font-bold">{t.favoriteAirline}</label>
                               <input 
+                                id="profile-favoriteairline"
+                                name="favoriteAirline"
                                 type="text" 
                                 value={profile.favoriteAirline} 
                                 onChange={(e) => setProfile(prev => ({ ...prev, favoriteAirline: e.target.value }))}
@@ -7509,8 +8363,10 @@ const newMessage = {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] text-white/40 uppercase font-bold">{t.equipment}</label>
+                              <label htmlFor="profile-equipment" className="text-[10px] text-white/40 uppercase font-bold">{t.equipment}</label>
                               <input 
+                                id="profile-equipment"
+                                name="equipment"
                                 type="text" 
                                 value={profile.equipment} 
                                 onChange={(e) => setProfile(prev => ({ ...prev, equipment: e.target.value }))}

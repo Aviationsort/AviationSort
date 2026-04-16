@@ -15,7 +15,13 @@ export default defineConfig(({mode}) => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       cors: true,
-      origin: 'http://localhost:3000',
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:5001',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });
