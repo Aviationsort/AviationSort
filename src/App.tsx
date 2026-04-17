@@ -814,6 +814,7 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
   const [isHold, setIsHold] = useState(false);
   const [eqHeights, setEqHeights] = useState<number[]>(Array(8).fill(4));
   const [guiStyle, setGuiStyle] = useState<'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566'>('sw950');
+  const [bassBoost, setBassBoost] = useState(false);
   const audioRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -821,6 +822,19 @@ const MusicPlayerComponent = ({ t }: { t: any }) => {
 
   const toggleHold = () => {
     setIsHold(!isHold);
+  };
+
+  const cycleMode = () => {
+    if (isShuffled) {
+      setIsShuffled(false);
+      setRepeatMode('one');
+    } else if (repeatMode === 'one') {
+      setRepeatMode('all');
+    } else if (repeatMode === 'all') {
+      setRepeatMode('off');
+    } else {
+      setIsShuffled(true);
+    }
   };
 
   useEffect(() => {
@@ -1306,23 +1320,25 @@ return (
             {/* Control Buttons */}
             <div className="sw-buttons-row">
               <button 
-                onClick={toggleShuffle} 
-                className={`sw-btn-grey ${isShuffled ? 'active' : ''}`}
-                title="Shuffle"
+                onClick={() => setShowQueueModal(true)} 
+                className="sw-btn-grey"
+                title="Memory"
               >
                 <span className="sw-btn-label">MEMORY</span>
               </button>
               <button 
-                className="sw-btn-grey"
+                onClick={cycleMode}
+                className={`sw-btn-grey ${(isShuffled || repeatMode !== 'off') ? 'active' : ''}`}
                 title="Mode"
               >
                 <span className="sw-btn-label">MODE</span>
               </button>
               <button 
-                className="sw-btn-green"
-                title="EQ"
+                onClick={() => setBassBoost(!bassBoost)}
+                className={`sw-btn-green ${bassBoost ? 'active' : ''}`}
+                title="Sound/Bass"
               >
-                <span className="sw-btn-label">EQ</span>
+                <span className="sw-btn-label">SOUND</span>
               </button>
             </div>
             
@@ -1470,8 +1486,8 @@ return (
 
               {/* Controls */}
               <div className="de330-controls">
-                <button onClick={toggleShuffle} className={`de330-btn-grey ${isShuffled ? 'active' : ''}`}>
-                  <span>SHUFFLE</span>
+                <button onClick={() => {}} className="de330-btn-grey">
+                  <span>MENU</span>
                 </button>
                 <div className="de330-nav-btns">
                   <button onClick={playPrev} className="de330-nav-btn">
@@ -1488,8 +1504,8 @@ return (
                     <SkipForward className="w-4 h-4" />
                   </button>
                 </div>
-                <button onClick={toggleRepeat} className={`de330-btn-grey ${repeatMode !== 'off' ? 'active' : ''}`}>
-                  <span>{repeatMode === 'one' ? '1' : 'ALL'}</span>
+                <button onClick={() => setBassBoost(!bassBoost)} className={`de330-btn-grey ${bassBoost ? 'active' : ''}`}>
+                  <span>SOUND</span>
                 </button>
               </div>
 
@@ -1664,28 +1680,28 @@ return (
                 <div className="exp3361-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
               </div>
 
-              {/* Controls */}
-              <div className="exp3361-controls">
-                <button onClick={toggleShuffle} className={`exp3361-btn ${isShuffled ? 'active' : ''}`}>
-                  <span>SHUF</span>
-                </button>
-                <button onClick={playPrev} className="exp3361-nav">
-                  <SkipBack className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
-                  className={`exp3361-play ${isPlaying ? 'playing' : ''}`}
-                  disabled={!currentTrack}
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                </button>
-                <button onClick={playNext} className="exp3361-nav">
-                  <SkipForward className="w-4 h-4" />
-                </button>
-                <button onClick={toggleRepeat} className={`exp3361-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
-                  <span>{repeatMode === 'one' ? '1' : 'RPT'}</span>
-                </button>
-              </div>
+               {/* Controls */}
+               <div className="exp3361-controls">
+                 <button onClick={() => setShowQueueModal(true)} className="exp3361-btn">
+                   <span>PROG</span>
+                 </button>
+                 <button onClick={playPrev} className="exp3361-nav">
+                   <SkipBack className="w-4 h-4" />
+                 </button>
+                 <button 
+                   onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                   className={`exp3361-play ${isPlaying ? 'playing' : ''}`}
+                   disabled={!currentTrack}
+                 >
+                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                 </button>
+                 <button onClick={playNext} className="exp3361-nav">
+                   <SkipForward className="w-4 h-4" />
+                 </button>
+                 <button onClick={toggleRepeat} className={`exp3361-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
+                   <span>MODE</span>
+                 </button>
+               </div>
 
               {/* Volume */}
               <div className="exp3361-volume">
@@ -1782,28 +1798,28 @@ return (
                 <div className="cd566-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
               </div>
 
-              {/* Controls */}
-              <div className="cd566-controls">
-                <button onClick={toggleShuffle} className={`cd566-btn ${isShuffled ? 'active' : ''}`}>
-                  <span>SHUFFLE</span>
-                </button>
-                <button onClick={playPrev} className="cd566-nav">
-                  <SkipBack className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
-                  className={`cd566-play ${isPlaying ? 'playing' : ''}`}
-                  disabled={!currentTrack}
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                </button>
-                <button onClick={playNext} className="cd566-nav">
-                  <SkipForward className="w-4 h-4" />
-                </button>
-                <button onClick={toggleRepeat} className={`cd566-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
-                  <span>{repeatMode === 'one' ? '1' : 'REPEAT'}</span>
-                </button>
-              </div>
+               {/* Controls */}
+               <div className="cd566-controls">
+                 <button onClick={() => setShowQueueModal(true)} className="cd566-btn">
+                   <span>PROGRAM</span>
+                 </button>
+                 <button onClick={playPrev} className="cd566-nav">
+                   <SkipBack className="w-4 h-4" />
+                 </button>
+                 <button 
+                   onClick={() => currentTrack && setIsPlaying(!isPlaying)} 
+                   className={`cd566-play ${isPlaying ? 'playing' : ''}`}
+                   disabled={!currentTrack}
+                 >
+                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                 </button>
+                 <button onClick={playNext} className="cd566-nav">
+                   <SkipForward className="w-4 h-4" />
+                 </button>
+                 <button onClick={toggleRepeat} className={`cd566-btn ${repeatMode !== 'off' ? 'active' : ''}`}>
+                   <span>{repeatMode === 'one' ? '1' : 'REPEAT'}</span>
+                 </button>
+               </div>
 
               {/* Volume */}
               <div className="cd566-volume">
