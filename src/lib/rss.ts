@@ -32,7 +32,7 @@ const RSS_CREDITS: Record<string, string> = {
   'https://www.flightglobal.com/feed/': 'Flight Global',
   'https://www.thehimalayantimes.com/rssFeed/11/44': 'The Himalayan Times',
   'https://news.un.org/feed/subscribe/en/news/all/rss.xml': 'UN News',
-  'https://rss.dw.com/rdf/rss-en-all': 'DW',
+  'https://rss.dw.com/atom/rss-en-all': 'DW',
   'https://feeds.abcnews.com/abcnews/politicsheadlines': 'ABC News',
   'https://feeds.abcnews.com/abcnews/usheadlines': 'ABC News',
   'https://feeds.abcnews.com/abcnews/internationalheadlines': 'ABC News',
@@ -53,6 +53,7 @@ const RSS_CREDITS: Record<string, string> = {
   'https://indianexpress.com/section/news-today/feed/': 'Indian Express',
   'https://www.lemonde.fr/en/international/rss_full.xml': 'Le Monde',
   'http://www.xinhuanet.com/english/rss/worldrss.xml': 'Xinhua',
+  'https://thediplomat.com/feed/': 'The Diplomat',
   'https://www.the961.com/feed/': 'The 961',
   'https://www.japantimes.co.jp/feed/': 'Japan Times',
   'https://www.thenation.com/feed/?post_type=article': 'The Nation',
@@ -90,6 +91,7 @@ const RSS_CREDITS: Record<string, string> = {
   'https://www.canberratimes.com.au/rss.xml': 'Canberra Times',
   'https://www.9news.com.au/rss': '9 News Australia',
   'https://www.ft.com/rss/home': 'Financial Times',
+  'https://tass.com/rss/v2.xml': 'TASS',
   'https://hungarytoday.hu/feed/': 'Hungary Today',
   'https://english.enabbaladi.net/rss/': 'Enab Baladi',
   'https://www.shafaq.com/rss/en/Iraq': 'Shafaq News',
@@ -98,6 +100,14 @@ const RSS_CREDITS: Record<string, string> = {
   'https://notesfrompoland.com/rss/': 'Notes from Poland',
   'https://api.axios.com/feed/': 'Axios',
   'https://www.buzzfeed.com/politics.xml': 'BuzzFeed',
+  'http://government.ru/en/all/rss/': 'Government.ru',
+  'https://www.arabfinance.com/en/rss/rssbycat/6': 'Arab Finance',
+  'https://sputnikglobe.com/export/rss2/archive/index.xml': 'Sputnik Globe',
+  'https://eng.globalaffairs.ru/feed/': 'Global Affairs',
+  'https://allafrica.com/tools/headlines/rdf/africa/headlines.rdf': 'AllAfrica',
+  'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
+  'https://www.dailynewsegypt.com/feed/': 'Daily News Egypt',
+  'https://egyptianstreets.com/feed/': 'Egyptian Streets',
 };
 
 const AVIATION_RSS_URLS = [
@@ -120,8 +130,14 @@ const AVIATION_RSS_URLS = [
 
 const WORLD_NEWS_URLS = [
   'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
-  'https://rss.dw.com/rdf/rss-en-all',
+  'https://www.aljazeera.com/xml/rss/all.xml',
+  'https://www.arabfinance.com/en/rss/rssbycat/6',
+  'https://www.dailynewsegypt.com/feed/',
+  'https://thediplomat.com/feed/',
+  'http://government.ru/en/all/rss/',
+  'https://rss.dw.com/atom/rss-en-all',
   'https://feeds.abcnews.com/abcnews/politicsheadlines',
+  'https://tass.com/rss/v2.xml',
   'https://feeds.abcnews.com/abcnews/usheadlines',
   'https://feeds.abcnews.com/abcnews/internationalheadlines',
   'https://www.cbc.ca/webfeed/rss/rss-canada',
@@ -136,6 +152,7 @@ const WORLD_NEWS_URLS = [
   'https://vietnamnews.vn/rss/world.rss',
   'https://feeds.feedburner.com/ndtvnews-world-news',
   'https://natowatch.org/news.xml',
+  'https://egyptianstreets.com/feed/',
   'https://www.independent.co.uk/news/world/rss',
   'https://www.independent.co.uk/news/uk/rss',
   'https://indianexpress.com/section/news-today/feed/',
@@ -178,6 +195,8 @@ const WORLD_NEWS_URLS = [
   'https://www.canberratimes.com.au/rss.xml',
   'https://www.9news.com.au/rss',
   'https://www.ft.com/rss/home',
+  'https://eng.globalaffairs.ru/feed/',
+  'https://allafrica.com/tools/headlines/rdf/africa/headlines.rdf',
   'https://hungarytoday.hu/feed/',
   'https://english.enabbaladi.net/rss/',
   'https://www.shafaq.com/rss/en/Iraq',
@@ -185,7 +204,8 @@ const WORLD_NEWS_URLS = [
   'https://www.lbcgroup.tv/Rss/News/en/8/lebanon-news',
   'https://notesfrompoland.com/rss/',
   'https://api.axios.com/feed/',
-  'https://www.buzzfeed.com/politics.xml'
+  'https://www.buzzfeed.com/politics.xml',
+  'https://sputnikglobe.com/export/rss2/archive/index.xml',
 ];
 
 interface FeedResult {
