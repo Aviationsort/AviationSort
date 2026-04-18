@@ -4,4 +4,9 @@ node_modules/
 
 # Logs
 *.log
+
+# Environment variables
+.env
+.env.local
+.env.production
 ```
