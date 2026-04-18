@@ -77,7 +77,9 @@ import {
   Repeat,
   Repeat1,
   FolderPlus,
-  Lock
+  BarChart3,
+  Trophy,
+  Calendar
 } from 'lucide-react';
 
 import { cn } from './lib/utils';
@@ -6212,7 +6214,12 @@ export default function App() {
   // Folder Parsing
   const [isParsing, setIsParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState(0);
+  const [currentFileName, setCurrentFileName] = useState('');
 
+  // Album Feature States
+  const [albumViewMode, setAlbumViewMode] = useState<'grid' | 'ranking' | 'datechart'>('grid');
+  const [rankingSortBy, setRankingSortBy] = useState<'airline' | 'aircraftType' | 'date'>('airline');
+  const [dateChartInterval, setDateChartInterval] = useState<'week' | 'month' | 'year'>('month');
   // Reels Logic
   const reelsPhotos = useMemo(() => {
     if (reelHashtags.length === 0) {
@@ -6309,7 +6316,9 @@ export default function App() {
       
       const currentProgress = ((startIndex + chunk.length) / totalFiles) * 100;
       setParseProgress(Math.round(currentProgress));
-      setCurrentFileName((chunk[chunk.length - 1] as any)?.name || '');
+      if (chunk.length > 0) {
+        setCurrentFileName((chunk[chunk.length - 1] as any)?.name || '');
+      }
       
       // Process next batch with a minimal delay to keep UI responsive but fast
       setTimeout(() => processBatch(startIndex + chunkSize), 0);
@@ -6317,6 +6326,56 @@ export default function App() {
 
     processBatch(0);
   };
+
+  // Album Ranking Data
+  const albumRankingData = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    photos.forEach(photo => {
+      let key = 'Unknown';
+      if (rankingSortBy === 'airline') key = photo.airline || 'Unknown';
+      else if (rankingSortBy === 'aircraftType') key = photo.aircraftType || 'Unknown';
+      else if (rankingSortBy === 'date') key = photo.date || 'Unknown';
+      grouped[key] = (grouped[key] || 0) + 1;
+    });
+    
+    return Object.entries(grouped)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [photos, rankingSortBy]);
+
+  // Album Date Chart Data
+  const dateChartData = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    
+    photos.forEach(photo => {
+      if (!photo.date || photo.date === 'Unknown') return;
+      
+      let dateKey = '';
+      const dateParts = photo.date.split('.');
+      if (dateParts.length === 3) {
+        const [day, month, year] = dateParts;
+        const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`;
+        
+        if (dateChartInterval === 'year') {
+          dateKey = fullYear;
+        } else if (dateChartInterval === 'month') {
+          dateKey = `${fullYear}-${month}`;
+        } else if (dateChartInterval === 'week') {
+          const date = new Date(parseInt(fullYear), parseInt(month) - 1, parseInt(day));
+          const weekNum = Math.ceil(date.getDate() / 7);
+          dateKey = `${fullYear}-${month}-W${weekNum}`;
+        }
+      }
+      
+      if (dateKey) {
+        grouped[dateKey] = (grouped[dateKey] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(grouped)
+      .map(([period, count]) => ({ period, count }))
+      .sort((a, b) => a.period.localeCompare(b.period));
+  }, [photos, dateChartInterval]);
 
 
 
