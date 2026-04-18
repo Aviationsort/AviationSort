@@ -2,7 +2,7 @@ import React from 'react';
 import { List, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Repeat1 } from 'lucide-react';
 
 // Types and Interfaces remain the same
-type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566';
+type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566' | 'd901nv' | 'd421sp';
 
 interface Track {
   id: number;
@@ -55,7 +55,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
     <>
       {/* Style Selector with Glossy Glassmorphism */}
       <div className="flex gap-2 mb-6 flex-wrap justify-center p-4 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl">
-        {(['sw950', 'de330', 'd145', 'exp3361', 'cd566'] as GuiStyle[]).map((style) => (
+        {(['sw950', 'de330', 'd145', 'exp3361', 'cd566', 'd901nv', 'd421sp'] as GuiStyle[]).map((style) => (
           <button
             key={style}
             onClick={() => setGuiStyle(style)}
@@ -292,6 +292,100 @@ const MusicModels: React.FC<MusicModelsProps> = ({
             </div>
             
             <button onClick={() => setShowAddModal(true)} className="mt-4 text-[10px] text-zinc-400 font-bold tracking-widest hover:text-white uppercase">Open Tray</button>
+          </div>
+        </div>
+      )}
+
+      {/* --- SONY D-901 NV --- */}
+      {/* Sleek late 90s/early 2000s "NV" series with metallic finish and blue accents */}
+      {guiStyle === 'd901nv' && (
+        <div className="d901nv-player-outer relative w-80 h-80 rounded-[40px] bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 shadow-[10px_10px_30px_rgba(0,0,0,0.5),inset_2px_2px_10px_rgba(255,255,255,0.1)] border-4 border-slate-600 flex flex-col items-center p-6">
+          <div className="w-full flex justify-between items-center mb-4">
+            <span className="text-blue-400 font-black text-lg italic tracking-tighter">SONY</span>
+            <span className="text-slate-400 font-mono text-[10px]">Discman D-901NV</span>
+          </div>
+
+          <div className="w-full bg-slate-900/80 rounded-2xl p-4 border border-slate-700 shadow-inner flex justify-between items-center mb-4">
+             <div className="text-cyan-400 font-mono text-3xl drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]">
+               {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+             </div>
+             <div className="h-10 w-px bg-slate-700" />
+             <div className="text-blue-300 font-mono text-lg">
+               {currentTrack ? formatTime(currentTime) : '00:00'}
+             </div>
+          </div>
+
+          <div className="flex-1 w-full relative flex items-center justify-center mb-4">
+            <div className={`w-40 h-40 rounded-full bg-gradient-to-tr from-slate-600 to-slate-800 shadow-xl border-4 border-slate-500 flex items-center justify-center ${isPlaying ? 'animate-pulse' : ''}`}>
+               <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-600 shadow-lg border-4 border-slate-700 flex items-center justify-center">
+                 <Play className={`text-white w-12 h-12 fill-white ${isPlaying ? 'hidden' : 'block'}`} />
+                 <Pause className={`text-white w-12 h-12 fill-white ${isPlaying ? 'block' : 'hidden'}`} />
+               </div>
+            </div>
+          </div>
+
+          <div className="w-full flex justify-around items-center mt-2">
+             <button onClick={playPrev} className="text-cyan-400 hover:scale-110 transition-transform"><SkipBack /></button>
+             <button onClick={() => setIsPlaying(!isPlaying)} className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 border-2 border-blue-300">
+               {isPlaying ? <Pause className="fill-white" /> : <Play className="fill-white ml-1" />}
+             </button>
+             <button onClick={playNext} className="text-cyan-400 hover:scale-110 transition-transform"><SkipForward /></button>
+          </div>
+          
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-[8px] font-bold text-slate-400">VOL</span>
+            <input
+              type="range"
+              min="0" max="1" step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+              className="w-20 h-1 bg-slate-600 rounded-lg appearance-none accent-cyan-400"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* --- SONY D-421 SP --- */}
+      {/* Compact early 2000s "SP" series with sporty design and orange/green accents */}
+      {guiStyle === 'd421sp' && (
+        <div className="d421sp-player-outer relative w-76 h-76 rounded-[48px] bg-gradient-to-br from-emerald-700 via-teal-800 to-teal-900 shadow-[10px_10px_30px_rgba(0,0,0,0.5),inset_2px_2px_10px_rgba(255,255,255,0.1)] border-4 border-teal-600 flex flex-col items-center p-6">
+          <div className="w-full flex justify-between items-center mb-3">
+            <span className="text-orange-400 font-black text-lg italic tracking-tighter">SONY</span>
+            <span className="text-teal-300 font-mono text-[9px]">Discman D-421SP</span>
+          </div>
+
+          <div className="w-full bg-black/60 rounded-xl p-3 border-2 border-teal-600 shadow-inner flex justify-center items-center gap-6 mb-4">
+             <div className="text-green-400 font-mono text-4xl drop-shadow-[0_0_6px_rgba(74,222,128,0.7)]">
+               {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+             </div>
+             <div className="text-teal-300 font-mono text-base">
+               {currentTrack ? formatTime(currentTime) : '00:00'}
+             </div>
+          </div>
+
+          <div className="flex-1 w-full relative flex items-center justify-center mb-3">
+            <div className={`w-36 h-36 rounded-full bg-gradient-to-br from-teal-500 to-emerald-700 shadow-xl border-4 border-teal-400 flex items-center justify-center ${isPlaying ? 'animate-spin-slow' : ''}`}>
+               <div className="w-8 h-8 rounded-full bg-teal-900 border-2 border-teal-300" />
+            </div>
+          </div>
+
+          <div className="w-full grid grid-cols-3 gap-3 mt-2">
+             <button onClick={playPrev} className="h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white shadow-md active:scale-95 border-2 border-orange-300"><SkipBack className="fill-white w-5 h-5" /></button>
+             <button onClick={() => setIsPlaying(!isPlaying)} className="h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white shadow-md active:scale-95 border-2 border-green-300">
+               {isPlaying ? <Pause className="fill-white w-6 h-6" /> : <Play className="fill-white w-6 h-6 ml-1" />}
+             </button>
+             <button onClick={playNext} className="h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white shadow-md active:scale-95 border-2 border-orange-300"><SkipForward className="fill-white w-5 h-5" /></button>
+          </div>
+          
+          <div className="mt-3 flex items-center gap-2 w-full justify-center">
+            <span className="text-[8px] font-bold text-teal-300">VOLUME</span>
+            <input
+              type="range"
+              min="0" max="1" step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+              className="w-24 h-1 bg-teal-600 rounded-lg appearance-none accent-green-400"
+            />
           </div>
         </div>
       )}
