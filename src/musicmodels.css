@@ -50,19 +50,114 @@
   padding: 1.5rem;
 }
 
-/* Philips EXP3361 styles */
-.exp3361-player-outer {
+/* Philips EXP3361 Expanium styles - Realistic late 90s/early 2000s design */
+.cd-player-exp3361 {
   position: relative;
-  width: 20rem;
-  height: 20rem;
-  border-radius: 3.125rem;
-  background-color: rgb(244 244 245);
-  box-shadow: 10px 10px 30px rgba(0,0,0,0.2), inset -2px -2px 10px #fff;
-  border-bottom: 8px solid rgb(161 161 170);
+  width: 24rem;
+  height: 24rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.exp3361-shell {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid rgb(30 58 138);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.exp3361-faceplate {
+  position: absolute;
+  width: 88%;
+  height: 88%;
+  top: 6%;
+  left: 6%;
+  border-radius: 50%;
+  border: 2px solid rgb(148 163 184);
+  overflow: hidden;
+  background-color: #ccc;
+}
+
+.exp3361-lcd-hub {
+  position: absolute;
+  top: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  background-color: rgb(203 213 225);
+  border: 6px solid rgb(148 163 184);
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem;
+  padding-top: 2rem;
+}
+
+.exp3361-lcd-buttons {
+  position: absolute;
+  top: -0.25rem;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgb(71 85 105);
+}
+
+.exp3361-lcd-screen {
+  width: 6rem;
+  height: 3rem;
+  background-color: rgb(197 204 184);
+  border: 2px solid rgb(100 116 139);
+  border-radius: 0.25rem;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.exp3361-controls {
+  position: absolute;
+  bottom: 6rem;
+  left: 2.5rem;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 50%;
+  background-color: rgb(203 213 225);
+  border: 4px solid rgb(148 163 184);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exp3361-dbb {
+  position: absolute;
+  bottom: 8rem;
+  left: 11rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.exp3361-branding {
+  position: absolute;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* Durabrand CD-566 styles */
