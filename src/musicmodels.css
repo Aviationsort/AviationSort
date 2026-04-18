@@ -136,6 +136,75 @@
   background-color: rgb(203 213 225);
   border: 4px solid rgb(148 163 184);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+.de330-lid {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgb(220 220 230), rgb(180 180 190));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  position: relative;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.de330-control-island {
+  background: linear-gradient(180deg, rgb(240 240 250), rgb(200 200 210));
+  border: 2px solid rgb(150 150 160);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3), inset 0 1px 3px rgba(255,255,255,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.de330-lcd {
+  width: 60px;
+  height: 20px;
+  background: linear-gradient(180deg, rgb(100 120 100), rgb(80 100 80));
+  border: 1px solid rgb(60 80 60);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: rgb(150 200 150);
+  box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.de330-btn {
+  background: linear-gradient(180deg, rgb(220 220 220), rgb(160 160 160));
+  border: 1px solid rgb(120 120 120);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: bold;
+  color: rgb(60 60 60);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+
+.de330-btn:hover {
+  background: linear-gradient(180deg, rgb(240 240 240), rgb(180 180 180));
+}
+
+.de330-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.de330-btn-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgb(220 220 220), rgb(160 160 160));
+  border: 2px solid rgb(120 120 120);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,6 +227,36 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+.de330-btn-play:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* SONY Discman D-145 styles */
+.d145-player-outer {
+  position: relative;
+  width: 20rem;
+  height: 21rem;
+  background-color: rgb(39 39 42);
+  border-radius: 1.5rem;
+  box-shadow: 5px 5px 15px #000, -2px -2px 10px #444;
+  border-top: 1px solid rgb(82 82 91);
+  padding: 1.5rem;
+}
+
+/* Philips EXP3361 styles */
+.exp3361-player-outer {
+  position: relative;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 3.125rem;
+  background-color: rgb(244 244 245);
+  box-shadow: 10px 10px 30px rgba(0,0,0,0.2), inset -2px -2px 10px #fff;
+  border-bottom: 8px solid rgb(161 161 170);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
 }
 
 /* Durabrand CD-566 styles */
@@ -2009,6 +2108,27 @@
   }
 
   /* ===== Panasonic SL-SW950 Complete Design ===== */
+  /* Panasonic SL-SW950 button styles */
+.sw-btn-round {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #666;
+  background: radial-gradient(circle at 30% 30%, #ddd, #888);
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 2px rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.sw-btn-round:active {
+  transform: scale(0.95);
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+/* ===== Panasonic SL-SW950 Complete Design ===== */
 
   /* Main container */
   .sw-player-wrapper {
@@ -2029,9 +2149,23 @@
     align-items: center;
     justify-content: center;
     box-shadow: 
+    box-shadow:
       0 30px 60px rgba(0, 0, 0, 0.8),
       inset 0 0 50px rgba(0, 0, 0, 0.5),
       inset 0 0 100px rgba(0, 0, 0, 0.3);
+  }
+
+  .sw-ridges {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: repeating-conic-gradient(
+      from 0deg,
+      transparent 0deg 2deg,
+      rgba(0, 0, 0, 0.15) 2deg 4deg
+    );
+    pointer-events: none;
   }
 
   /* Rubber fins around edge */

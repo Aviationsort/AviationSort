@@ -3,6 +3,7 @@ import { List, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Rep
 
 // Types and Interfaces remain the same
 type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566' | 'd901nv' | 'd421sp';
+type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566';
 
 interface Track {
   id: number;
@@ -57,6 +58,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
       {/* Style Selector with Glossy Glassmorphism */}
       <div className="flex gap-2 mb-6 flex-wrap justify-center p-4 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl">
         {(['sw950', 'de330', 'd145', 'exp3361', 'cd566', 'd901nv', 'd421sp'] as GuiStyle[]).map((style) => (
+        {(['sw950', 'de330', 'd145', 'exp3361', 'cd566'] as GuiStyle[]).map((style) => (
           <button
             key={style}
             onClick={() => setGuiStyle(style)}
@@ -81,6 +83,9 @@ const MusicModels: React.FC<MusicModelsProps> = ({
             {/* Top Branding - AviationSort */}
             <div className="mt-6 flex flex-col items-center z-10">
               <span className="text-[10px] font-black tracking-[0.3em] text-zinc-700 uppercase">AviationSort</span>
+            {/* Top Branding */}
+            <div className="mt-6 flex flex-col items-center z-10">
+              <span className="text-[10px] font-black tracking-[0.3em] text-zinc-700 uppercase">Panasonic</span>
               <span className="text-[7px] font-bold text-zinc-600">PORTABLE CD PLAYER</span>
             </div>
 
@@ -99,6 +104,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
 
               {/* Circular LCD */}
               <div className={`sw-lcd-circle ${isPlaying ? 'animate-pulse' : ''}`}>
+               <div className={`sw-lcd ${isPlaying ? 'pulse' : ''}`}>
                  <span className="text-[8px] font-bold">VOL {Math.round(volume * 100)}</span>
                  <span className="text-xl font-bold leading-none my-1">
                    {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : 'NO'}
@@ -130,6 +136,12 @@ const MusicModels: React.FC<MusicModelsProps> = ({
             {/* AviationSort Branding Top Center */}
             <div className="absolute top-12 w-full flex flex-col items-center">
               <span className="text-zinc-600 font-bold tracking-[0.2em] text-sm italic">AviationSort</span>
+        <div className="de330-player-outer">
+          <div className="de330-lid">
+
+            {/* SONY Branding Top Center */}
+            <div className="absolute top-12 w-full flex flex-col items-center">
+              <span className="text-zinc-600 font-bold tracking-[0.2em] text-sm italic">SONY</span>
               <div className="h-[1px] w-12 bg-zinc-400 my-1"></div>
               <span className="text-[9px] font-bold text-zinc-500 tracking-widest">CD COMPACT PLAYER D-E330</span>
             </div>
@@ -196,6 +208,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
           <div className="flex justify-between items-center mb-4">
             <span className="text-zinc-400 text-xs font-bold tracking-[0.2em]">DIGITAL AUDIO</span>
             <span className="text-white font-black italic text-sm tracking-tighter">AviationSort</span>
+            <span className="text-white font-black italic text-sm tracking-tighter">Discman</span>
           </div>
 
           <div className="bg-[#2a302a] border-2 border-zinc-900 rounded-sm p-3 shadow-[inset_0_2px_5px_rgba(0,0,0,0.5)] mb-6">
@@ -299,6 +312,38 @@ const MusicModels: React.FC<MusicModelsProps> = ({
               </div>
             </div>
           </div>
+      {/* Glossy early 2000s tech-white and transparent blue accents */}
+      {guiStyle === 'exp3361' && (
+        <div className="exp3361-player-outer relative w-80 h-80 rounded-[50px] bg-zinc-100 shadow-[10px_10px_30px_rgba(0,0,0,0.2),inset_-2px_-2px_10px_#fff] border-b-8 border-zinc-300 flex flex-col items-center p-6">
+          <div className="w-full flex justify-between items-center mb-2">
+            <span className="text-blue-600 font-black text-xl italic tracking-tighter">Philips</span>
+            <span className="text-zinc-400 font-mono text-[10px]">eXpanium</span>
+          </div>
+
+          <div className="w-full bg-blue-500/10 rounded-3xl p-4 border border-blue-200 shadow-inner flex justify-center items-center gap-4 mb-4">
+             <div className="text-blue-600 font-mono text-4xl">
+               {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : '--'}
+             </div>
+             <div className="h-8 w-px bg-blue-200" />
+             <div className="text-blue-400 font-mono text-lg">
+               {currentTrack ? formatTime(currentTime) : '00:00'}
+             </div>
+          </div>
+
+          <div className="flex-1 w-full relative flex items-center justify-center">
+            <div className={`w-36 h-36 rounded-full bg-white border-2 border-blue-100 shadow-xl flex items-center justify-center ${isPlaying ? 'animate-pulse' : ''}`}>
+               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 shadow-lg border-4 border-white flex items-center justify-center">
+                 <Play className={`text-white w-10 h-10 fill-white ${isPlaying ? 'hidden' : 'block'}`} />
+                 <Pause className={`text-white w-10 h-10 fill-white ${isPlaying ? 'block' : 'hidden'}`} />
+               </div>
+            </div>
+          </div>
+
+          <div className="w-full flex justify-around mt-4">
+             <button onClick={playPrev} className="text-blue-600 hover:scale-110 transition-transform"><SkipBack /></button>
+             <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95"><Play className="fill-white" /></button>
+             <button onClick={playNext} className="text-blue-600 hover:scale-110 transition-transform"><SkipForward /></button>
+          </div>
         </div>
       )}
 
@@ -311,6 +356,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
           <div className="relative z-10 p-8 flex flex-col h-full">
             <div className="text-center mb-4">
               <h3 className="text-zinc-200 font-black tracking-[0.3em] text-xs">AviationSort</h3>
+              <h3 className="text-zinc-200 font-black tracking-[0.3em] text-xs">DURABRAND</h3>
             </div>
 
             <div className="bg-black/80 rounded border-2 border-zinc-700 p-4 mb-6 shadow-inner">
