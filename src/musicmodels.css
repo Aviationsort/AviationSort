@@ -136,6 +136,8 @@
   background-color: rgb(203 213 225);
   border: 4px solid rgb(148 163 184);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
 .de330-lid {
   width: 100%;
   height: 100%;
@@ -227,6 +229,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
 .de330-btn-play:active {
   transform: translateY(2px);
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);

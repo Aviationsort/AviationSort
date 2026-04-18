@@ -2,7 +2,6 @@ import React from 'react';
 import { List, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Repeat1 } from 'lucide-react';
 
 // Types and Interfaces remain the same
-type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566' | 'd901nv' | 'd421sp';
 type GuiStyle = 'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566';
 
 interface Track {
@@ -57,7 +56,6 @@ const MusicModels: React.FC<MusicModelsProps> = ({
     <>
       {/* Style Selector with Glossy Glassmorphism */}
       <div className="flex gap-2 mb-6 flex-wrap justify-center p-4 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl">
-        {(['sw950', 'de330', 'd145', 'exp3361', 'cd566', 'd901nv', 'd421sp'] as GuiStyle[]).map((style) => (
         {(['sw950', 'de330', 'd145', 'exp3361', 'cd566'] as GuiStyle[]).map((style) => (
           <button
             key={style}
@@ -80,9 +78,6 @@ const MusicModels: React.FC<MusicModelsProps> = ({
           <div className="sw-lid">
             <div className="sw-brick-texture" />
 
-            {/* Top Branding - AviationSort */}
-            <div className="mt-6 flex flex-col items-center z-10">
-              <span className="text-[10px] font-black tracking-[0.3em] text-zinc-700 uppercase">AviationSort</span>
             {/* Top Branding */}
             <div className="mt-6 flex flex-col items-center z-10">
               <span className="text-[10px] font-black tracking-[0.3em] text-zinc-700 uppercase">Panasonic</span>
@@ -130,12 +125,6 @@ const MusicModels: React.FC<MusicModelsProps> = ({
 
       {/* --- SONY D-E330 DISCMAN --- */}
       {guiStyle === 'de330' && (
-        <div className="de330-body">
-          <div className="de330-lid">
-
-            {/* AviationSort Branding Top Center */}
-            <div className="absolute top-12 w-full flex flex-col items-center">
-              <span className="text-zinc-600 font-bold tracking-[0.2em] text-sm italic">AviationSort</span>
         <div className="de330-player-outer">
           <div className="de330-lid">
 

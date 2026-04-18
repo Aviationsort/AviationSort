@@ -1,255 +1,53 @@
 ```
-# Compiled and build artifacts
-*.pyc
-__pycache__/```
- |  | 
-2
- 
-3
- 
-# Compiled and build artifacts
-4
- 
-*.pyc
-5
- 
-__pycache__/
-6
- 
-*.o
-7
- 
-*.obj
-8
- 
-*.exe
-9
- 
-*.dll
-10
- 
-*.so
-11
- 
-*.a
-12
- 
-*.out
-13
- 
-dist/
-14
- 
-build/
-15
- 
-target/
-16
- 
-​
-17
- 
 # Dependencies
-18
- 
 node_modules/
-19
- 
-venv/
-20
- 
-.venv/
-21
- 
-.env
-22
- 
-.env.local
-23
- 
-.env.*
-24
- 
-​
-25
- 
-# Logs and temp files
-26
- 
-*.log
-27
- 
-*.tmp
-28
- 
-*.swp
-29
- 
-*.swo
-30
- 
-​
-31
- 
-# Editors
-32
- 
-.vscode/
-33
- 
-.idea/
-34
- 
-*.swp
-35
- 
-*.swo
-36
- 
-​
-37
- 
-# System files
-38
- 
-.DS_Store
-39
- 
-Thumbs.db
-40
- 
-​
-41
- 
-# Coverage
-42
- 
-coverage/
-43
- 
-htmlcov/
-44
- 
-.coverage
-45
- 
-​
-46
- 
-# Python specific
-47
- 
-.mypy_cache/
-48
- 
-.pytest_cache/
-49
- 
-​
-50
- 
-# Compressed files
-51
- 
-*.zip
-52
- 
-*.gz
-53
- 
-*.tar
-54
- 
-*.tgz
-55
- 
-*.bz2
-56
- 
-*.xz
-57
- 
-*.7z
-58
- 
-*.rar
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
+
+# Build outputs
 dist/
 build/
-target/
-
-# Dependencies
-node_modules/
-venv/
-.venv/
-.env
-.env.local
-.env.*
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Python specific
-.mypy_cache/
-.pytest_cache/
-
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
-```
-# Dependencies
-node_modules/
-
-# Logs
-*.log
+*.js.map
+*.ts.map
 
 # Environment variables
 .env
 .env.local
-.env.production
+*.env.*
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
 ```
-.extension/
