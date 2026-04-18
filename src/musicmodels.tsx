@@ -97,7 +97,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
               </div>
 
               {/* Circular LCD */}
-              <div className={`sw-lcd-circle ${isPlaying ? 'animate-pulse' : ''}`}>
+               <div className={`sw-lcd ${isPlaying ? 'pulse' : ''}`}>
                  <span className="text-[8px] font-bold">VOL {Math.round(volume * 100)}</span>
                  <span className="text-xl font-bold leading-none my-1">
                    {currentTrack ? String(currentTrackIndex + 1).padStart(2, '0') : 'NO'}
@@ -123,7 +123,7 @@ const MusicModels: React.FC<MusicModelsProps> = ({
 
       {/* --- SONY D-E330 DISCMAN --- */}
       {guiStyle === 'de330' && (
-        <div className="de330-body">
+        <div className="de330-player-outer">
           <div className="de330-lid">
 
             {/* SONY Branding Top Center */}
