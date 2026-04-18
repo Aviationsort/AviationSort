@@ -108,6 +108,8 @@ const RSS_CREDITS: Record<string, string> = {
   'https://www.aljazeera.com/xml/rss/all.xml': 'Al Jazeera',
   'https://www.dailynewsegypt.com/feed/': 'Daily News Egypt',
   'https://egyptianstreets.com/feed/': 'Egyptian Streets',
+  'https://www.gbnews.com/feeds/politics.rss' : 'GB News',
+  'https://www.gbnews.com/feeds/news.rss' : 'GB News',
 };
 
 const AVIATION_RSS_URLS = [
@@ -132,6 +134,8 @@ const WORLD_NEWS_URLS = [
   'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
   'https://www.aljazeera.com/xml/rss/all.xml',
   'https://www.arabfinance.com/en/rss/rssbycat/6',
+  'https://www.gbnews.com/feeds/politics.rss',
+  'https://www.gbnews.com/feeds/news.rss',
   'https://www.dailynewsegypt.com/feed/',
   'https://thediplomat.com/feed/',
   'http://government.ru/en/all/rss/',
