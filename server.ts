@@ -167,6 +167,7 @@ const flexpicsCursor = flexpicsDb.prepare(`
     photo_airline TEXT,
     photo_aircraft_type TEXT,
     photo_date TEXT,
+    special_livery TEXT,
     file_directory TEXT,
     date_added TEXT,
     hashtags TEXT,
@@ -177,29 +178,7 @@ const flexpicsCursor = flexpicsDb.prepare(`
   )
 `).run();
 
-const playlistsDb = sqlite3(path.join(__dirname, 'playlists.db'));
-playlistsDb.prepare(`
-  CREATE TABLE IF NOT EXISTS playlists (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    username TEXT,
-    created_at TEXT
-  )
-`).run();
 
-playlistsDb.prepare(`
-  CREATE TABLE IF NOT EXISTS tracks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    playlist_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    url TEXT NOT NULL,
-    source TEXT NOT NULL,
-    duration INTEGER DEFAULT 0,
-    thumbnail TEXT,
-    added_at TEXT,
-    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
-  )
-`).run();
 
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(32);
@@ -431,6 +410,7 @@ app.get('/api/flexpics', (req: Request, res: Response) => {
     photo_airline: row.photo_airline,
     photo_aircraft_type: row.photo_aircraft_type,
     photo_date: row.photo_date,
+    special_livery: row.special_livery,
     file_directory: row.file_directory,
     date_added: row.date_added,
     hashtags: row.hashtags,
@@ -456,6 +436,7 @@ app.get('/api/flexpics/similar', (req: Request, res: Response) => {
     photo_airline: row.photo_airline,
     photo_aircraft_type: row.photo_aircraft_type,
     photo_date: row.photo_date,
+    special_livery: row.special_livery,
     file_directory: row.file_directory,
     date_added: row.date_added
   }));
@@ -464,13 +445,13 @@ app.get('/api/flexpics/similar', (req: Request, res: Response) => {
 });
 
 app.post('/api/flexpics', (req: Request, res: Response) => {
-  const { username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, file_directory, date_added, hashtags, is_video, width, height, file_size } = req.body;
-  
+  const { username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, special_livery, file_directory, date_added, hashtags, is_video, width, height, file_size } = req.body;
+
   flexpicsDb.prepare(`
-    INSERT INTO flexpics (username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, file_directory, date_added, hashtags, is_video, width, height, file_size)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, file_directory, date_added, hashtags, is_video ? 1 : 0, width || 0, height || 0, file_size || 0);
-  
+    INSERT INTO flexpics (username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, special_livery, file_directory, date_added, hashtags, is_video, width, height, file_size)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, special_livery, file_directory, date_added, hashtags, is_video ? 1 : 0, width || 0, height || 0, file_size || 0);
+
   res.json({ success: true });
 });
 
@@ -538,83 +519,7 @@ app.get('/api/session', (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/playlists', (req: Request, res: Response) => {
-  const { username } = req.query;
-  let rows: any[];
-  
-  if (username) {
-    rows = playlistsDb.prepare('SELECT * FROM playlists WHERE username = ? ORDER BY created_at DESC').all(username);
-  } else {
-    rows = playlistsDb.prepare('SELECT * FROM playlists ORDER BY created_at DESC').all();
-  }
-  
-  const playlists = rows.map((row: any) => ({
-    id: row.id,
-    name: row.name,
-    username: row.username,
-    created_at: row.created_at
-  }));
-  
-  res.json(playlists);
-});
 
-app.post('/api/playlists', (req: Request, res: Response) => {
-  const { name, username } = req.body;
-  const createdAt = new Date().toISOString();
-  
-  const result = playlistsDb.prepare('INSERT INTO playlists (name, username, created_at) VALUES (?, ?, ?)').run(name || 'Untitled Playlist', username || 'anonymous', createdAt);
-  
-  res.json({ success: true, id: result.lastInsertRowid });
-});
-
-app.delete('/api/playlists/:playlist_id', (req: Request, res: Response) => {
-  const { playlist_id } = req.params;
-  playlistsDb.prepare('DELETE FROM playlists WHERE id = ?').run(playlist_id);
-  res.json({ success: true });
-});
-
-app.get('/api/playlists/:playlist_id/tracks', (req: Request, res: Response) => {
-  const { playlist_id } = req.params;
-  
-  const rows = playlistsDb.prepare('SELECT * FROM tracks WHERE playlist_id = ? ORDER BY added_at DESC').all(playlist_id);
-  
-  const tracks = rows.map((row: any) => ({
-    id: row.id,
-    playlist_id: row.playlist_id,
-    title: row.title,
-    url: row.url,
-    source: row.source,
-    duration: row.duration,
-    thumbnail: row.thumbnail,
-    added_at: row.added_at
-  }));
-  
-  res.json(tracks);
-});
-
-app.post('/api/playlists/:playlist_id/tracks', (req: Request, res: Response) => {
-  const { playlist_id } = req.params;
-  const { title, url, source, duration, thumbnail } = req.body;
-  const addedAt = new Date().toISOString();
-  
-  const result = playlistsDb.prepare('INSERT INTO tracks (playlist_id, title, url, source, duration, thumbnail, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    playlist_id,
-    title || 'Unknown',
-    url || '',
-    source || 'local',
-    duration || 0,
-    thumbnail || '',
-    addedAt
-  );
-  
-  res.json({ success: true, id: result.lastInsertRowid });
-});
-
-app.delete('/api/playlists/:playlist_id/tracks/:track_id', (req: Request, res: Response) => {
-  const { track_id } = req.params;
-  playlistsDb.prepare('DELETE FROM tracks WHERE id = ?').run(track_id);
-  res.json({ success: true });
-});
 
 app.get('/api/flexpics/export', (req: Request, res: Response) => {
   const { username, format } = req.query;
@@ -626,25 +531,30 @@ app.get('/api/flexpics/export', (req: Request, res: Response) => {
     rows = flexpicsDb.prepare('SELECT * FROM flexpics').all();
   }
   
-  if (format === 'csv') {
-    const csvHeader = 'id,username,photo_url,registration,airline,aircraft_type,date,hashtags\n';
-    const csvRows = rows.map((row: any) => 
-      `${row.id},${row.username},${row.photo_url},${row.photo_registration},${row.photo_airline},${row.photo_aircraft_type},${row.photo_date},${row.hashtags}`
-    ).join('\n');
-    
+if (format === 'csv') {
+    const csvHeader = 'id,username,photo_url,photo_thumbnail_url,photo_registration,photo_airline,photo_aircraft_type,photo_date,special_livery,file_directory,date_added,hashtags,is_video,width,height,file_size\n';
+    const csvRows = rows.map(row => `${row.id},"${row.username}","${row.photo_url}","${row.photo_thumbnail_url}","${row.photo_registration}","${row.photo_airline}","${row.photo_aircraft_type}","${row.photo_date}","${row.special_livery}","${row.file_directory}","${row.date_added}","${row.hashtags}",${row.is_video},${row.width},${row.height},${row.file_size}`).join('\n');
     res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=flexpics.csv' }).send(csvHeader + csvRows);
     return;
   }
-  
+
   const flexpics = rows.map((row: any) => ({
     id: row.id,
     username: row.username,
     photo_url: row.photo_url,
+    photo_thumbnail_url: row.photo_thumbnail_url,
     photo_registration: row.photo_registration,
     photo_airline: row.photo_airline,
     photo_aircraft_type: row.photo_aircraft_type,
     photo_date: row.photo_date,
-    hashtags: row.hashtags
+    special_livery: row.special_livery,
+    file_directory: row.file_directory,
+    date_added: row.date_added,
+    hashtags: row.hashtags,
+    is_video: Boolean(row.is_video),
+    width: row.width,
+    height: row.height,
+    file_size: row.file_size
   }));
   
   res.json(flexpics);

@@ -1,5 +1,6 @@
-const STORAGE_KEY = 'aviation_sort_token';
-const PEPPER = 'aviation_sort_pepper_2024';
+// Note: PEPPER should be moved to server-side environment variables
+// This is a placeholder - actual pepper should come from secure server config
+const PEPPER_PLACEHOLDER = 'aviation_sort_pepper_placeholder';
 
 export interface EncryptionResult {
   success: boolean;
@@ -22,6 +23,10 @@ const STORAGE_KEYS = {
 const SESSION_TIMEOUT = 3600;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 300000;
+
+// SECURITY WARNING: This module contains client-side encryption utilities.
+// For production applications, sensitive operations should be moved to server-side.
+// Client-side encryption can be bypassed by determined attackers.
 
 export const encryption = {
   async generateKey(): Promise<CryptoKey> {
@@ -92,43 +97,51 @@ export const encryption = {
   },
 
   async getOrCreateKey(): Promise<CryptoKey> {
-    const storedKey = localStorage.getItem(STORAGE_KEYS.CRYPTO_KEY);
+    // Use sessionStorage for better security - keys are cleared when session ends
+    const storedKey = sessionStorage.getItem(STORAGE_KEYS.CRYPTO_KEY);
     if (storedKey) {
       return await this.importKey(storedKey);
     }
     const newKey = await this.generateKey();
     const exported = await this.exportKey(newKey);
-    localStorage.setItem(STORAGE_KEYS.CRYPTO_KEY, exported);
+    sessionStorage.setItem(STORAGE_KEYS.CRYPTO_KEY, exported);
     return newKey;
   },
 
   hashPassword(password: string): string {
+    // WARNING: Password hashing should be done server-side only
+    // Client-side hashing exposes passwords to potential attacks
+    console.warn('Password hashing on client-side is insecure. Use server-side hashing instead.');
+
     const salt = this.generateRandomBytes(32);
-    const pepperBytes = new TextEncoder().encode(PEPPER);
+    const pepperBytes = new TextEncoder().encode(PEPPER_PLACEHOLDER);
     const passwordBytes = new TextEncoder().encode(password);
     const combined = new Uint8Array(salt.length + pepperBytes.length + passwordBytes.length);
     combined.set(salt, 0);
     combined.set(pepperBytes, 32);
     combined.set(passwordBytes, 64);
-    
+
     return this.arrayBufferToBase64(salt) + '.' + this.sha256Sync(combined);
   },
 
   verifyPassword(password: string, storedHash: string): boolean {
+    // WARNING: Password verification should be done server-side only
+    console.warn('Password verification on client-side is insecure. Use server-side verification instead.');
+
     try {
       const parts = storedHash.split('.');
       if (parts.length !== 2) return false;
-      
+
       const salt = this.base64ToArrayBuffer(parts[0]);
       const storedPwdHash = parts[1];
-      const pepperBytes = new TextEncoder().encode(PEPPER);
+      const pepperBytes = new TextEncoder().encode(PEPPER_PLACEHOLDER);
       const passwordBytes = new TextEncoder().encode(password);
-      
+
       const combined = new Uint8Array(salt.byteLength + pepperBytes.length + passwordBytes.length);
       combined.set(new Uint8Array(salt), 0);
       combined.set(pepperBytes, salt.byteLength);
       combined.set(passwordBytes, salt.byteLength + pepperBytes.length);
-      
+
       const computedHash = this.sha256Sync(combined);
       return this.timingSafeEqual(computedHash, storedPwdHash);
     } catch {
@@ -145,8 +158,13 @@ export const encryption = {
   },
 
   hashData(data: string): string {
+    // Validate input to prevent injection attacks
+    if (typeof data !== 'string' || data.length > 10000) {
+      throw new Error('Invalid data for hashing');
+    }
+
     const encoder = new TextEncoder();
-    const bytes = encoder.encode(data + PEPPER);
+    const bytes = encoder.encode(data + PEPPER_PLACEHOLDER);
     return this.sha256Sync(bytes);
   },
 
@@ -220,17 +238,36 @@ export const encryption = {
   }
 };
 
+// SECURITY WARNING: Client-side session management is vulnerable to XSS attacks.
+// Use secure HTTP-only cookies for server-side session management in production.
+
 export const session = {
   getToken(): string | null {
-    return localStorage.getItem(STORAGE_KEYS.TOKEN);
+    try {
+      return localStorage.getItem(STORAGE_KEYS.TOKEN);
+    } catch (error) {
+      console.error('Failed to get token from storage:', error);
+      return null;
+    }
   },
 
   setToken(token: string): void {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+    if (!token || typeof token !== 'string' || token.length > 1000) {
+      throw new Error('Invalid token');
+    }
+    try {
+      localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+    } catch (error) {
+      console.error('Failed to store token:', error);
+    }
   },
 
   removeToken(): void {
-    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    } catch (error) {
+      console.error('Failed to remove token:', error);
+    }
   },
 
   async authHeader(): Promise<Record<string, string>> {
@@ -321,11 +358,16 @@ class RateLimiter {
 export const rateLimiter = new RateLimiter();
 
 export function sanitizeInput(input: string): string {
+  if (typeof input !== 'string') return '';
+
   return input
-    .replace(/[<>]/g, '')
-    .replace(/javascript:/gi, '')
-    .replace(/on\w+=/gi, '')
-    .trim();
+    .replace(/[<>]/g, '') // Remove HTML tags
+    .replace(/javascript:/gi, '') // Remove javascript: URLs
+    .replace(/on\w+=/gi, '') // Remove event handlers
+    .replace(/['"`]/g, '') // Remove quotes that could be used for injection
+    .replace(/[^\w\s@.-]/g, '') // Allow only safe characters
+    .trim()
+    .substring(0, 500); // Limit length
 }
 
 export function validateEmail(email: string): boolean {

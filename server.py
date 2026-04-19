@@ -264,7 +264,10 @@ import ssl
 import os
 
 # Use TLS with explicit version constraints for Windows compatibility
-context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+try:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+except AttributeError:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 context.minimum_version = ssl.TLSVersion.TLSv1_2
 context.maximum_version = ssl.TLSVersion.TLSv1_3
 context.check_hostname = False
@@ -765,4 +768,4 @@ if __name__ == '__main__':
     print(f"Server running at https://localhost:{PORT}")
     print("Press Ctrl+C to stop")
     
-    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False, ssl_context=context)
+    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, ssl_context=context)

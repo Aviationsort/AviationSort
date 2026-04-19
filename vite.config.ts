@@ -13,9 +13,10 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
+      hmr: process.env.DISABLE_HMR !== 'true' ? { clientPort: 5173 } : false,
       cors: true,
       port: 5173,
+      host: '127.0.0.1',
       proxy: {
         '/api': {
           target: 'http://127.0.0.1:5001',

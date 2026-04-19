@@ -24,7 +24,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   X,
   Minus,
   Square,
@@ -62,20 +61,10 @@ import {
   AlertCircle,
   Maximize2,
   LogOut,
-  Music,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
   Plus,
   Trash2,
   Upload,
   Youtube,
-  Shuffle,
-  Repeat,
-  Repeat1,
   FolderPlus,
   BarChart3,
   Trophy,
@@ -83,10 +72,9 @@ import {
 } from 'lucide-react';
 
 import { cn } from './lib/utils';
-import { fetchAviationNews, fetchWorldNews, AVIATION_RSS_URLS, WORLD_NEWS_URLS, NewsItem, NewsSource } from './lib/rss';
+import { fetchAviationNews, fetchWorldNews, AVIATION_RSS_URLS, WORLD_NEWS_URLS, NewsItem, NewsSource, RSS_CREDITS } from './lib/rss';
 
-import MusicModels from './musicmodels';
-import './musicmodels.css';
+// Removed PhilipsAviationDataPlayer import
 
 const LineChart = lazy(() => import('recharts').then(module => ({ default: module.LineChart })));
 const Line = lazy(() => import('recharts').then(module => ({ default: module.Line })));
@@ -110,6 +98,8 @@ interface Photo {
   isFavorite: boolean;
   hashtags?: string[];
   isVideo?: boolean;
+  specialLivery?: string;
+  file_directory?: string;
 }
 
 interface Story {
@@ -321,7 +311,7 @@ const PhotoCard = React.memo(({ photo, onClick, toggleFavorite }: { photo: Photo
     </div>
     <div className="space-y-1 px-1">
       <div className="flex justify-between items-start">
-        <h4 className="font-black italic text-red-500 uppercase tracking-tighter text-lg">{photo.registration}</h4>
+        <h4 className="font-black italic text-red-500 uppercase tracking-tighter text-lg">{photo.registration}{photo.specialLivery ? ' ' + photo.specialLivery : ''}</h4>
         <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full">{photo.date}</span>
       </div>
       <p className="text-xs font-bold text-white/80 truncate">{photo.airline}</p>
@@ -777,748 +767,9 @@ const AuthModal = ({ isOpen, onClose, onLogin }: { isOpen: boolean, onClose: () 
   );
 };
 
-// --- Music Player Component ---
-
-interface Track {
-  id: number;
-  playlist_id: number;
-  title: string;
-  url: string;
-  source: string;
-  duration: number;
-  thumbnail: string;
-  added_at: string;
-}
-
-interface Playlist {
-  id: number;
-  name: string;
-  username: string;
-  created_at: string;
-}
-
-const MusicPlayerComponent = ({ t }: { t: any }) => {
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(80);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showNewPlaylistModal, setShowNewPlaylistModal] = useState(false);
-  const [showQueueModal, setShowQueueModal] = useState(false);
-  const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [trackTitle, setTrackTitle] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isShuffled, setIsShuffled] = useState(false);
-  const [repeatMode, setRepeatMode] = useState<'off' | 'one' | 'all'>('off');
-  const [originalOrder, setOriginalOrder] = useState<number[]>([]);
-  const [isHold, setIsHold] = useState(false);
-  const [eqHeights, setEqHeights] = useState<number[]>(Array(8).fill(4));
-  const [guiStyle, setGuiStyle] = useState<'sw950' | 'de330' | 'd145' | 'exp3361' | 'cd566'>('sw950');
-  const [bassBoost, setBassBoost] = useState(false);
-  const audioRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const currentTrack = tracks[currentTrackIndex];
-
-  const toggleHold = () => {
-    setIsHold(!isHold);
-  };
-
-  const cycleMode = () => {
-    if (isShuffled) {
-      setIsShuffled(false);
-      setRepeatMode('one');
-    } else if (repeatMode === 'one') {
-      setRepeatMode('all');
-    } else if (repeatMode === 'all') {
-      setRepeatMode('off');
-    } else {
-      setIsShuffled(true);
-    }
-  };
-
-  useEffect(() => {
-    if (isHold && audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    }
-  }, [isHold]);
-
-  useEffect(() => {
-    fetchPlaylists();
-  }, []);
-
-  useEffect(() => {
-    if (selectedPlaylist) {
-      fetchTracks(selectedPlaylist.id);
-    }
-  }, [selectedPlaylist]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.play().catch(console.error);
-      } else {
-        audioRef.current.pause();
-      }
-    }
-  }, [isPlaying, currentTrack]);
-
-  useEffect(() => {
-    if (!isPlaying) {
-      setEqHeights(Array(8).fill(4));
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setEqHeights(Array(8).fill(0).map(() => 20 + Math.random() * 40));
-    }, 150);
-
-    return () => clearInterval(interval);
-  }, [isPlaying]);
-
-  // Keyboard controls for music player
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      
-      switch (e.key) {
-        case ' ':
-          e.preventDefault();
-          currentTrack && setIsPlaying(!isPlaying);
-          break;
-        case 'ArrowRight':
-          playNext();
-          break;
-        case 'ArrowLeft':
-          playPrev();
-          break;
-        case 'm':
-          toggleMute();
-          break;
-        case 's':
-          toggleShuffle();
-          break;
-        case 'r':
-          toggleRepeat();
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, currentTrack]);
-
-  // Optimized handlers with useCallback
-  const fetchPlaylists = useCallback(async () => {
-    try {
-      const res = await fetch('/api/playlists');
-      const data = await res.json();
-      setPlaylists(data);
-    } catch (err) {
-      console.error('Failed to fetch playlists:', err);
-    }
-  }, []);
-
-  const fetchTracks = async (playlistId: number) => {
-    try {
-      const res = await fetch(`/api/playlists/${playlistId}/tracks`);
-      const data = await res.json();
-      setTracks(data);
-    } catch (err) {
-      console.error('Failed to fetch tracks:', err);
-    }
-  };
-
-  const createPlaylist = async () => {
-    if (!newPlaylistName.trim()) return;
-    try {
-      const res = await fetch('/api/playlists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newPlaylistName, username: 'user' })
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchPlaylists();
-        setNewPlaylistName('');
-        setShowNewPlaylistModal(false);
-      }
-    } catch (err) {
-      console.error('Failed to create playlist:', err);
-    }
-  };
-
-  const deletePlaylist = async (playlistId: number) => {
-    try {
-      await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE' });
-      if (selectedPlaylist?.id === playlistId) {
-        setSelectedPlaylist(null);
-        setTracks([]);
-      }
-      fetchPlaylists();
-    } catch (err) {
-      console.error('Failed to delete playlist:', err);
-    }
-  };
-
-  const addLocalTrack = async () => {
-    if (!selectedPlaylist || !trackTitle.trim()) return;
-    fileInputRef.current?.click();
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !selectedPlaylist) return;
-    
-    setIsLoading(true);
-    const file = files[0];
-    const url = URL.createObjectURL(file);
-    
-    try {
-      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: trackTitle || file.name,
-          url: url,
-          source: 'local',
-          duration: 0,
-          thumbnail: ''
-        })
-      });
-      fetchTracks(selectedPlaylist.id);
-      setTrackTitle('');
-      setShowAddModal(false);
-    } catch (err) {
-      console.error('Failed to add track:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const addYouTubeTrack = async () => {
-    if (!selectedPlaylist || !youtubeUrl.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      let videoId = '';
-      const ytMatch = youtubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-      if (ytMatch) {
-        videoId = ytMatch[1];
-      }
-      
-      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: trackTitle || `YouTube Track`,
-          url: youtubeUrl,
-          source: 'youtube',
-          duration: 0,
-          thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
-        })
-      });
-      fetchTracks(selectedPlaylist.id);
-      setYoutubeUrl('');
-      setTrackTitle('');
-      setShowAddModal(false);
-    } catch (err) {
-      console.error('Failed to add YouTube track:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const deleteTrack = async (trackId: number) => {
-    if (!selectedPlaylist) return;
-    try {
-      await fetch(`/api/playlists/${selectedPlaylist.id}/tracks/${trackId}`, { method: 'DELETE' });
-      fetchTracks(selectedPlaylist.id);
-    } catch (err) {
-      console.error('Failed to delete track:', err);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-      setDuration(audioRef.current.duration || 0);
-    }
-  };
-
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const vol = parseInt(e.target.value);
-    setVolume(vol);
-    if (audioRef.current) {
-      audioRef.current.volume = vol / 100;
-    }
-    if (vol > 0) setIsMuted(false);
-  };
-
-  const toggleMute = () => {
-    if (audioRef.current) {
-      if (isMuted) {
-        audioRef.current.volume = volume / 100;
-        setIsMuted(false);
-      } else {
-        audioRef.current.volume = 0;
-        setIsMuted(true);
-      }
-    }
-  };
-
-  const shuffleArray = (array: number[]) => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
-
-  const toggleShuffle = () => {
-    if (!isShuffled) {
-      const indices = tracks.map((_, i) => i);
-      const shuffled = shuffleArray(indices);
-      setOriginalOrder(indices);
-      const currentPos = shuffled.indexOf(currentTrackIndex);
-      shuffled.splice(currentPos, 1);
-      shuffled.unshift(currentTrackIndex);
-      setTracksOrder(shuffled);
-    } else {
-      setTracksOrder(originalOrder);
-    }
-    setIsShuffled(!isShuffled);
-  };
-
-  const [tracksOrder, setTracksOrder] = useState<number[]>([]);
-
-  useEffect(() => {
-    if (tracks.length > 0) {
-      setTracksOrder(tracks.map((_, i) => i));
-      setOriginalOrder(tracks.map((_, i) => i));
-    }
-  }, [tracks]);
-
-  const getOrderedIndex = (index: number) => {
-    return tracksOrder[index];
-  };
-
-  const playNext = () => {
-    if (tracksOrder.length === 0) return;
-    
-    const currentPosInOrder = tracksOrder.indexOf(currentTrackIndex);
-    
-    if (repeatMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(console.error);
-      }
-      return;
-    }
-    
-    if (currentPosInOrder < tracksOrder.length - 1) {
-      setCurrentTrackIndex(tracksOrder[currentPosInOrder + 1]);
-    } else if (repeatMode === 'all') {
-      setCurrentTrackIndex(tracksOrder[0]);
-    }
-  };
-
-  const playPrev = () => {
-    if (tracksOrder.length === 0) return;
-    
-    const currentPosInOrder = tracksOrder.indexOf(currentTrackIndex);
-    
-    if (currentTime > 3) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-      }
-      return;
-    }
-    
-    if (currentPosInOrder > 0) {
-      setCurrentTrackIndex(tracksOrder[currentPosInOrder - 1]);
-    } else if (repeatMode === 'all') {
-      setCurrentTrackIndex(tracksOrder[tracksOrder.length - 1]);
-    }
-  };
-
-  const toggleRepeat = () => {
-    setRepeatMode(prev => {
-      if (prev === 'off') return 'all';
-      if (prev === 'all') return 'one';
-      return 'off';
-    });
-  };
-
-  const getEmbedUrl = (url: string) => {
-    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-    if (ytMatch) {
-      return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&controls=1`;
-    }
-    return url;
-  };
-
-return (
-    <motion.div
-      key="music"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="h-full flex flex-col items-center gap-6 overflow-auto py-4 px-4"
-    >
-      <MusicModels
-        guiStyle={guiStyle}
-        setGuiStyle={setGuiStyle}
-        isPlaying={isPlaying}
-        setIsPlaying={setIsPlaying}
-        currentTrack={currentTrack}
-        currentTrackIndex={currentTrackIndex}
-        currentTime={currentTime}
-        duration={duration}
-        volume={volume / 100}
-        isMuted={isMuted}
-        isHold={isHold}
-        isShuffled={isShuffled}
-        repeatMode={repeatMode}
-        eqHeights={eqHeights}
-        handleProgressClick={handleProgressClick}
-        handleVolumeChange={handleVolumeChange}
-        toggleMute={toggleMute}
-        toggleHold={toggleHold}
-        toggleShuffle={toggleShuffle}
-        toggleRepeat={toggleRepeat}
-        playNext={playNext}
-        playPrev={playPrev}
-        setShowAddModal={setShowAddModal}
-        setShowQueueModal={setShowQueueModal}
-        formatTime={formatTime}
-        t={{ playlists: t.playlists || 'Playlists', noPlaylists: t.noPlaylists || 'No playlists' }}
-      />
 
 
-
-
-
-
-
-      {/* Playlists and Tracks */}
-      <div className="w-full max-w-md space-y-4">
-        <div className="aero-container rounded-[2rem] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-black italic uppercase text-white/60">{t.playlists}</span>
-            <button 
-              onClick={() => setShowNewPlaylistModal(true)}
-              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-          
-          <div className="space-y-2">
-            {playlists.length === 0 ? (
-              <p className="text-xs text-white/30 text-center py-4">{t.noPlaylists}</p>
-            ) : (
-              playlists.map(playlist => (
-                <div
-                  key={playlist.id}
-                  className={`p-3 rounded-xl cursor-pointer transition-all ${selectedPlaylist?.id === playlist.id ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => setSelectedPlaylist(playlist)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/30 to-red-900/30 flex items-center justify-center">
-                        <Music className="w-4 h-4 text-red-500/60" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold truncate">{playlist.name}</p>
-                        <p className="text-[10px] text-white/30">{(new Date(playlist.created_at)).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deletePlaylist(playlist.id);
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-3 h-3 text-white/40 hover:text-red-500" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Tracks Panel */}
-        <div className="aero-container rounded-[2rem] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-black italic uppercase text-white/60">
-              {selectedPlaylist ? selectedPlaylist.name : t.noPlaylists}
-            </span>
-            {selectedPlaylist && (
-              <button 
-                onClick={() => setShowAddModal(true)} 
-                className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 transition-colors"
-              >
-                <Plus className="w-4 h-4 text-red-500" />
-              </button>
-            )}
-          </div>
-          
-          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
-            {!selectedPlaylist ? (
-              <p className="text-xs text-white/30 text-center py-4">{t.createFirstPlaylist}</p>
-            ) : tracks.length === 0 ? (
-              <p className="text-xs text-white/30 text-center py-4">{t.noTracks}</p>
-            ) : (
-              tracks.map((track, index) => (
-                <div
-                  key={track.id}
-                  className={`p-3 rounded-xl cursor-pointer transition-all group ${currentTrackIndex === index && currentTrack?.id === track.id ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => {
-                    setCurrentTrackIndex(index);
-                    setIsPlaying(true);
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/30 to-red-900/30 flex items-center justify-center shrink-0 overflow-hidden">
-                      {track.thumbnail ? (
-                        <img src={track.thumbnail} className="w-full h-full object-cover" />
-                      ) : track.source === 'youtube' ? (
-                        <Youtube className="w-4 h-4 text-red-500" />
-                      ) : (
-                        <Music className="w-4 h-4 text-red-500/60" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{track.title}</p>
-                      <p className="text-[10px] text-white/40 uppercase">{track.source}</p>
-                    </div>
-                    {currentTrackIndex === index && currentTrack?.id === track.id && isPlaying && (
-                      <div className="flex gap-0.5 items-center h-4">
-                        {[...Array(3)].map((_, i) => (
-                          <motion.div
-                            key={i}
-                            className="w-1 bg-red-500 rounded-full"
-                            animate={{ height: [4, 12, 8] }}
-                            transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.1 }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTrack(track.id);
-                      }}
-                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
-                    >
-                      <Trash2 className="w-3 h-3 text-white/40 hover:text-red-500" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* New Playlist Modal */}
-      {showNewPlaylistModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowNewPlaylistModal(false)}>
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-black italic uppercase">{t.createPlaylist}</h3>
-              <button onClick={() => setShowNewPlaylistModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <input
-              type="text"
-              value={newPlaylistName}
-              onChange={(e) => setNewPlaylistName(e.target.value)}
-              placeholder={t.playlists}
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <AeroButton variant="black" className="flex-1" onClick={() => setShowNewPlaylistModal(false)}>
-                {t.close}
-              </AeroButton>
-              <AeroButton variant="red" className="flex-1" onClick={createPlaylist}>
-                {t.createPlaylist}
-              </AeroButton>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Add Track Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowAddModal(false)}>
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-black italic uppercase">{t.addTrack}</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <input
-              type="text"
-              value={trackTitle}
-              onChange={(e) => setTrackTitle(e.target.value)}
-              placeholder={t.trackTitle}
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors mb-4"
-            />
-            
-            <div className="mb-4">
-              <p className="text-xs text-white/40 mb-2 font-bold uppercase tracking-wider">{t.addLocalFile}</p>
-              <button 
-                onClick={addLocalTrack}
-                className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-sm font-bold hover:bg-white/10 flex items-center justify-center gap-2 transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                {t.addLocalFile}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*,video/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-xs text-white/40 mb-2 font-bold uppercase tracking-wider">{t.addFromYouTube}</p>
-              <input
-                type="text"
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder={t.enterYouTubeUrl}
-                className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-red-500/50 transition-colors"
-              />
-              <button 
-                onClick={addYouTubeTrack}
-                disabled={!youtubeUrl.trim() || isLoading}
-                className="w-full mt-2 py-3 px-4 bg-red-600/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-500 hover:bg-red-600/30 flex items-center justify-center gap-2 transition-colors"
-              >
-                <Youtube className="w-4 h-4" />
-                {isLoading ? t.adding : t.addFromYouTube}
-              </button>
-            </div>
-            
-            <AeroButton variant="black" className="w-full" onClick={() => {
-              setShowAddModal(false);
-              setTrackTitle('');
-              setYoutubeUrl('');
-            }}>
-              {t.close}
-            </AeroButton>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Queue Modal */}
-      {showQueueModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowQueueModal(false)}>
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="aero-container rounded-[2rem] p-6 w-full max-w-sm mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-black italic uppercase">Queue</h3>
-              <button onClick={() => setShowQueueModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 no-scrollbar">
-              {tracks.map((track, index) => (
-                <div
-                  key={track.id}
-                  className={`p-3 rounded-xl cursor-pointer transition-all ${currentTrackIndex === index ? 'bg-red-600/20 border border-red-500/30' : 'bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => {
-                    setCurrentTrackIndex(index);
-                    setShowQueueModal(false);
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                      {isPlaying && currentTrackIndex === index ? (
-                        <motion.div 
-                          className="w-2 h-2 bg-red-500 rounded-full"
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ repeat: Infinity, duration: 0.5 }}
-                        />
-                      ) : (
-                        <span className="text-[10px] font-bold text-white/40">{index + 1}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{track.title}</p>
-                      <p className="text-[10px] text-white/40 uppercase">{track.source}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <AeroButton variant="black" className="w-full mt-4" onClick={() => setShowQueueModal(false)}>
-              {t.close}
-            </AeroButton>
-          </motion.div>
-        </div>
-      )}
-    </motion.div>
-  );
-};
+// Music player removed
 
 // --- Main App ---
 
@@ -1607,7 +858,7 @@ const TRANSLATIONS = {
     private: "Private Profile",
     personalInfo: "Personal Info",
     bio: "Bio",
-    location: "Location",
+
     displayName: "Display Name",
     shareProfile: "Share Profile",
     skydrop: "SkyDrop",
@@ -1658,28 +909,13 @@ const TRANSLATIONS = {
     copyLink: "Copy Profile Link",
     close: "Close",
     date: "Date",
-    locationLabel: "Location",
+
     resetRadar: "Reset Radar",
     worldNews: "World News",
     loadingSources: "Loading Sources",
     fetchingLatest: "Fetching latest world news...",
     articlesLoaded: "articles loaded from sources",
-    rssEnglishOnly: "RSS feeds are only available in English",
-    musicPlayer: "Music",
-    playlists: "Playlists",
-    nowPlaying: "Now Playing",
-    createPlaylist: "Create Playlist",
-    addTrack: "Add Track",
-    addFromYouTube: "Add from YouTube",
-    addLocalFile: "Add Local File",
-    enterYouTubeUrl: "Enter YouTube URL",
-    trackTitle: "Track Title",
-    noPlaylists: "No playlists yet",
-    noTracks: "No tracks in this playlist",
-    createFirstPlaylist: "Create your first playlist",
-    adding: "Adding...",
-    deletePlaylist: "Delete Playlist",
-    deleteTrack: "Delete Track"
+    rssEnglishOnly: "RSS feeds are only available in English"
   },
   fr: {
     dashboard: "Tableau de bord",
@@ -3236,7 +2472,7 @@ const TRANSLATIONS = {
     copyLink: "Copy Profile Link",
     close: "Close",
     date: "Date",
-    locationLabel: "Location",
+
     resetRadar: "Reset Radar"
   },
   es: {
@@ -5791,22 +5027,8 @@ export default function App() {
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const [reelHashtags, setReelHashtags] = useState<string[]>(['lhr', 'a380']);
   const [newHashtag, setNewHashtag] = useState('');
-  const [currentFileName, setCurrentFileName] = useState<string>('');
   const [lang, setLang] = useState<'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es'>('en');
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
-  const langMenuRef = useRef<HTMLDivElement>(null);
   const t = useMemo(() => (TRANSLATIONS as any)[lang] || TRANSLATIONS.en, [lang]);
-
-  useEffect(() => {
-    if (!langMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
-        setLangMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [langMenuOpen]);
 
   // Profile State
   const [profile, setProfile] = useState<ProfileData>({
@@ -5825,6 +5047,24 @@ export default function App() {
   const [worldPage, setWorldPage] = useState(1);
   const [newsPerPage, setNewsPerPage] = useState(10);
   const [newsTab, setNewsTab] = useState<'aviation' | 'world' | 'status'>('aviation');
+  const [newsSort, setNewsSort] = useState<'date' | 'bias' | 'source'>('date');
+
+  // Sorting functions
+  const sortNews = (items: NewsItem[]) => {
+    return [...items].sort((a, b) => {
+      switch (newsSort) {
+        case 'date':
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case 'bias':
+          const biasOrder = { 'Propaganda': 0, 'Right-wing': 1, 'Centrist': 2, 'Left-wing': 3 };
+          return biasOrder[b.category] - biasOrder[a.category];
+        case 'source':
+          return a.source.localeCompare(b.source);
+        default:
+          return 0;
+      }
+    });
+  };
   const [worldNews, setPoliticalNews] = useState<NewsItem[]>([]);
   const [worldSources, setPoliticalSources] = useState<NewsSource[]>([]);
   const [worldNewsLoading, setWorldNewsLoading] = useState(false);
@@ -6207,6 +5447,69 @@ export default function App() {
     fetchData();
   }, []);
 
+  // Check RSS Feed Statuses
+  const checkFeedStatus = async () => {
+    const allUrls = [...AVIATION_RSS_URLS, ...WORLD_NEWS_URLS];
+    const startTime = new Date().toLocaleTimeString();
+
+    // Initialize status as loading
+    const initStatus = allUrls.map(url => ({
+      url,
+      status: 'loading' as const,
+      message: 'Checking...',
+      time: startTime
+    }));
+    setFeedStatus(initStatus);
+
+    // Check each feed
+    const results = await Promise.allSettled(
+      allUrls.map(async (url) => {
+        try {
+          const response = await fetch(`/api/proxy?url=${encodeURIComponent(url)}&cache=false`, {
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+          });
+          return { url, success: response.ok, message: response.ok ? 'Online' : `HTTP ${response.status}` };
+        } catch (error: any) {
+          return {
+            url,
+            success: false,
+            message: error.name === 'TimeoutError' ? 'Timeout' :
+                    error.message?.includes('fetch') ? 'Network error' :
+                    error.message || 'Error'
+          };
+        }
+      })
+    );
+
+    const updatedStatus = results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        const { url, success, message } = result.value;
+        return {
+          url,
+          status: success ? 'success' as const : 'failed' as const,
+          message,
+          time: new Date().toLocaleTimeString()
+        };
+      } else {
+        return {
+          url: allUrls[index],
+          status: 'failed' as const,
+          message: 'Check failed',
+          time: new Date().toLocaleTimeString()
+        };
+      }
+    });
+
+    setFeedStatus(updatedStatus);
+  };
+
+  // Check feed status when status tab is selected
+  useEffect(() => {
+    if (newsTab === 'status') {
+      checkFeedStatus();
+    }
+  }, [newsTab]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -6216,42 +5519,7 @@ export default function App() {
   const [parseProgress, setParseProgress] = useState(0);
   const [currentFileName, setCurrentFileName] = useState('');
 
-  // Album Feature States
-  const [albumViewMode, setAlbumViewMode] = useState<'grid' | 'ranking' | 'datechart'>('grid');
-  const [rankingSortBy, setRankingSortBy] = useState<'airline' | 'aircraftType' | 'date'>('airline');
-  const [dateChartInterval, setDateChartInterval] = useState<'week' | 'month' | 'year'>('month');
-  // Reels Logic
-  const reelsPhotos = useMemo(() => {
-    if (reelHashtags.length === 0) {
-      return [...photos].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-    }
-    
-    return photos
-      .map(p => {
-        const matches = (p.hashtags || []).filter((tag: string) => tag && reelHashtags.includes(tag.toLowerCase())).length || 0;
-        return { ...p, score: matches };
-      })
-      .filter(p => p.score > 0)
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
-      });
-  }, [photos, reelHashtags]);
 
-  const addHashtag = () => {
-    const trimmed = newHashtag?.trim() || '';
-    if (trimmed && !reelHashtags.includes(trimmed.toLowerCase())) {
-      setReelHashtags(prev => [...prev, trimmed.toLowerCase()]);
-      setNewHashtag('');
-    }
-  };
-
-  const removeHashtag = (tag: string) => {
-    setReelHashtags(prev => prev.filter(t => t !== tag));
-  };
-
-  // FlexPics (Derived)
-  const flexPics = useMemo(() => photos.filter(p => p.isFavorite), [photos]);
 
   const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -6283,29 +5551,66 @@ export default function App() {
       for (let i = 0; i < chunk.length; i++) {
         const file = chunk[i] as File;
         if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+          const relativePath = (file as any).webkitRelativePath;
+          const pathParts = relativePath.split('/');
+          const selectedFolder = pathParts[0];
+          let airline = 'Unknown';
+          let aircraftType = 'Unknown';
+
+          // Check if hierarchical structure
+          if (pathParts.length >= 4) { // folder/airline/aircraft/file.jpg
+            airline = pathParts[1];
+            aircraftType = pathParts[2];
+          }
+
           const name = file.name.replace(/\.[^/.]+$/, "");
           let registration = 'Unknown';
+          let specialLivery = '';
           let date = 'Unknown';
-          let airline = 'Unknown';
 
-          const regMatch = name.match(/^([A-Z0-9-]+)/);
-          if (regMatch) registration = regMatch[1];
+          // Parse registration and special livery
+          const regLiveryMatch = name.match(/^([A-Z0-9\-\.]+)(?:\s+(.+?))?(?=\s*\(|$)/);
+          if (regLiveryMatch) {
+            registration = regLiveryMatch[1];
+            specialLivery = regLiveryMatch[2] || '';
+          }
 
-          const dateMatch = name.match(/\((\d{2}\.\d{2}\.\d{2})\)/);
-          if (dateMatch) date = dateMatch[1];
+          // Parse date
+          const dateMatch = name.match(/(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})/);
+          if (dateMatch) {
+            const month = parseInt(dateMatch[1]);
+            const day = parseInt(dateMatch[2]);
+            let year = parseInt(dateMatch[3]);
+            if (year < 100) year = 2000 + year;
+            date = `${month}.${day}.${year % 100}`;
+          }
 
-          const airlineMatch = name.match(/\[(.*?)\]/);
-          if (airlineMatch) airline = airlineMatch[1];
+          // For flat structure, extract airline from filename
+          if (pathParts.length < 4) {
+            const airlineMatch = name.match(/\[(.*?)\]/);
+            if (airlineMatch) {
+              const airlineAircraft = airlineMatch[1];
+              const parts = airlineAircraft.split(/\s+/);
+              airline = parts[0] || 'Unknown';
+              aircraftType = parts.slice(1).join(' ') || 'Unknown';
+            }
+          }
+
+          const extension = file.name.split('.').pop();
+          const mediaName = `${registration}${specialLivery ? ' ' + specialLivery : ''} (${date})`;
+          const file_directory = `${selectedFolder}/${airline}/${aircraftType}/${mediaName}.${extension}`;
 
           batch.push({
             id: Math.random().toString(36).substr(2, 9),
             url: URL.createObjectURL(file as any),
             registration,
             airline,
-            aircraftType: 'Parsed Aircraft',
+            aircraftType,
             date,
             isFavorite: false,
-            isVideo: file.type.startsWith('video/')
+            isVideo: file.type.startsWith('video/'),
+            specialLivery: specialLivery || undefined,
+            file_directory
           });
         }
       }
@@ -6381,10 +5686,11 @@ export default function App() {
 
   const filteredPhotos = useMemo(() => {
     const safeSearch = searchQuery?.toLowerCase() || '';
-    const filtered = photos.filter(p => 
+    const filtered = photos.filter(p =>
       (p.registration || '').toLowerCase().includes(safeSearch) ||
       (p.airline || '').toLowerCase().includes(safeSearch) ||
-      (p.aircraftType || '').toLowerCase().includes(safeSearch)
+      (p.aircraftType || '').toLowerCase().includes(safeSearch) ||
+      (p.specialLivery || '').toLowerCase().includes(safeSearch)
     );
 
     return [...filtered].sort((a, b) => {
@@ -6407,11 +5713,12 @@ export default function App() {
   const paginatedFlexPics = useMemo(() => {
     const safeSearch = flexSearchQuery?.toLowerCase() || '';
     const filtered = flexPics.filter(p => {
-      const matchesSearch = 
+      const matchesSearch =
         (p.registration || '').toLowerCase().includes(safeSearch) ||
         (p.airline || '').toLowerCase().includes(safeSearch) ||
-        (p.aircraftType || '').toLowerCase().includes(safeSearch);
-      const matchesHashtag = selectedHashtag 
+        (p.aircraftType || '').toLowerCase().includes(safeSearch) ||
+        (p.specialLivery || '').toLowerCase().includes(safeSearch);
+      const matchesHashtag = selectedHashtag
         ? (p.hashtags || []).includes(selectedHashtag)
         : true;
       return matchesSearch && matchesHashtag;
@@ -6526,7 +5833,7 @@ export default function App() {
   const sendMessage = () => {
     if (!messageInput.trim() || !activeChat) return;
     
-const newMessage = {
+    const newMessage = {
       id: Date.now().toString(),
       senderId: 'me',
       text: messageInput,
@@ -6680,55 +5987,30 @@ const newMessage = {
           </div>
 
             <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-between md:justify-end overflow-x-auto no-scrollbar">
-              <AnimatePresence>
-                <motion.div 
-                  ref={langMenuRef}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="relative"
-                >
+              <div className="flex items-center gap-1 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full p-1 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0">
+                {[
+                  { code: 'en', flag: '🇬🇧', label: 'EN' },
+                  { code: 'fr', flag: '🇫🇷', label: 'FR' },
+                  { code: 'arz', flag: '🇪🇬', label: 'AR' },
+                  { code: 'de', flag: '🇩🇪', label: 'DE' },
+                  { code: 'ru', flag: '🇷🇺', label: 'RU' },
+                  { code: 'es', flag: '🇪🇸', label: 'ES' }
+                ].map((l) => (
                   <button
-                    onClick={() => setLangMenuOpen(!langMenuOpen)}
-                    className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-full px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_2px_10px_rgba(255,255,255,0.1)] shrink-0 hover:bg-white/10 transition-colors"
+                    key={l.code}
+                    onClick={() => setLang(l.code as 'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es')}
+                    className={cn(
+                      "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200",
+                      lang === l.code
+                        ? "bg-red-500 text-white shadow-lg scale-105"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    )}
                   >
-                    <span className="text-sm font-bold">{lang === 'en' ? '🇬🇧' : lang === 'fr' ? '🇫🇷' : lang === 'arz' ? '🇪🇬' : lang === 'de' ? '🇩🇪' : lang === 'ru' ? '🇷🇺' : '🇪🇸'}</span>
-                    <span className="text-xs font-bold uppercase tracking-widest">{lang === 'en' ? 'EN' : lang === 'fr' ? 'FR' : lang === 'arz' ? 'ARZ' : lang === 'de' ? 'DE' : lang === 'ru' ? 'RU' : 'ES'}</span>
-                    <ChevronDown className="w-3 h-3" />
+                    <span className="text-sm">{l.flag}</span>
+                    <span>{l.label}</span>
                   </button>
-                  
-                  {langMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute top-full mt-2 right-0 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-2xl p-2 shadow-2xl z-50 min-w-[160px]"
-                    >
-                      {[
-                        { code: 'en', label: 'English', flag: '🇬🇧' },
-                        { code: 'fr', label: 'Français', flag: '🇫🇷' },
-                        { code: 'arz', label: 'العربية', flag: '🇪🇬' },
-                        { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
-                        { code: 'ru', label: 'Русский', flag: '🇷🇺' },
-                        { code: 'es', label: 'Español', flag: '🇪🇸' }
-                      ].map((l) => (
-                        <button
-                          key={l.code}
-                          onClick={() => { setLang(l.code as 'en' | 'fr' | 'arz' | 'de' | 'ru' | 'es'); setLangMenuOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-bold transition-colors",
-                            lang === l.code ? "bg-red-500/20 text-red-500" : "hover:bg-white/10 text-white/80"
-                          )}
-                        >
-                          <span>{l.flag}</span>
-                          <span>{l.label}</span>
-                          {lang === l.code && <Check className="w-4 h-4 ml-auto text-red-500" />}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+                ))}
+              </div>
             <div className="aero-window-controls shrink-0">
               <button className="aero-control-btn"><Minus className="w-4 h-4" /></button>
               <button className="aero-control-btn"><Square className="w-3 h-3" /></button>
@@ -6748,7 +6030,6 @@ const newMessage = {
               { id: 'flexpics', icon: Heart, label: t.flexpics },
               { id: 'news', icon: Newspaper, label: t.news },
               { id: 'skychat', icon: MessageSquare, label: t.skychat },
-              { id: 'music', icon: Music, label: t.musicPlayer || 'Music' },
               { id: 'clock', icon: Clock, label: t.clock },
               { id: 'calculator', icon: Calculator, label: t.aerocalc },
               { id: 'profile', icon: User, label: t.profile },
@@ -7190,12 +6471,16 @@ const newMessage = {
                 >
                   <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                     <div className="space-y-2">
-                      <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">
-                        {newsTab === 'aviation' ? t.aviationNews : t.worldNews}
-                      </h2>
-                      <p className="text-xs text-white/40 font-bold uppercase tracking-widest">
-                        {newsTab === 'aviation' ? t.newsCredit : 'Coming Soon'}
-                      </p>
+                       <h2 className="text-4xl font-black italic glossy-text uppercase tracking-tighter">
+                         {newsTab === 'aviation' ? t.aviationNews :
+                          newsTab === 'world' ? t.worldNews :
+                          'RSS Status'}
+                       </h2>
+                       <p className="text-xs text-white/40 font-bold uppercase tracking-widest">
+                         {newsTab === 'aviation' ? t.newsCredit :
+                          newsTab === 'world' ? 'Coming Soon' :
+                          'Monitor RSS feed availability'}
+                       </p>
                     </div>
                     
                     <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
@@ -7220,22 +6505,57 @@ const newMessage = {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <AeroButton
-                      variant={newsTab === 'aviation' ? 'red' : 'black'}
-                      className="px-6 py-2"
-                      onClick={() => { setNewsTab('aviation'); setAviationPage(1); }}
-                    >
-                      Aviation News
-                    </AeroButton>
-                    <AeroButton
-                      variant={newsTab === 'world' ? 'red' : 'black'}
-                      className="px-6 py-2"
-                      onClick={() => { setNewsTab('world'); setWorldPage(1); }}
-                    >
-                      World News
-                    </AeroButton>
-                  </div>
+                   <div className="flex gap-2">
+                     <AeroButton
+                       variant={newsTab === 'aviation' ? 'red' : 'black'}
+                       className="px-6 py-2"
+                       onClick={() => { setNewsTab('aviation'); setAviationPage(1); }}
+                     >
+                       Aviation News
+                     </AeroButton>
+                     <AeroButton
+                       variant={newsTab === 'world' ? 'red' : 'black'}
+                       className="px-6 py-2"
+                       onClick={() => { setNewsTab('world'); setWorldPage(1); }}
+                     >
+                       World News
+                     </AeroButton>
+                     <AeroButton
+                       variant={newsTab === 'status' ? 'red' : 'black'}
+                       className="px-6 py-2"
+                       onClick={() => setNewsTab('status')}
+                     >
+                       Status
+                     </AeroButton>
+                   </div>
+
+                    {/* Sorting Controls */}
+                    {(newsTab === 'aviation' || newsTab === 'world') && newsTab !== 'status' && (
+                     <div className="flex gap-2 flex-wrap">
+                       <span className="text-sm font-bold text-white/60 self-center">Sort by:</span>
+                       <AeroButton
+                         variant={newsSort === 'date' ? 'red' : 'black'}
+                         className="px-4 py-1 text-sm"
+                         onClick={() => setNewsSort('date')}
+                       >
+                         Date
+                       </AeroButton>
+                       <AeroButton
+                         variant={newsSort === 'bias' ? 'red' : 'black'}
+                         className="px-4 py-1 text-sm"
+                         onClick={() => setNewsSort('bias')}
+                       >
+                         Bias
+                       </AeroButton>
+                       <AeroButton
+                         variant={newsSort === 'source' ? 'red' : 'black'}
+                         className="px-4 py-1 text-sm"
+                         onClick={() => setNewsSort('source')}
+                       >
+                         Source A-Z
+                       </AeroButton>
+                     </div>
+                   )}
 
                   <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] scroll-smooth [-webkit-overflow-scrolling:touch]">
                     {/* World News Progress - Simplified Frutiger Aero */}
@@ -7262,7 +6582,7 @@ const newMessage = {
                     </div>
                     
                     {newsTab === 'aviation' ? (
-                      news.slice((aviationPage - 1) * newsPerPage, aviationPage * newsPerPage).map(item => (
+                      sortNews(news).slice((aviationPage - 1) * newsPerPage, aviationPage * newsPerPage).map(item => (
                       <GlassCard 
                         key={item.id} 
                         className="hover:border-red-500/30 transition-colors group cursor-pointer"
@@ -7271,9 +6591,37 @@ const newMessage = {
                         <div className="flex flex-col md:flex-row gap-6">
                           <div className="w-full md:w-48 h-32 rounded-xl overflow-hidden bg-red-900/20 flex items-center justify-center border border-white/5 relative">
                             <Newspaper className="w-12 h-12 text-red-500/40 group-hover:scale-110 transition-transform" />
-                            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[8px] font-black text-white/60 uppercase tracking-widest">
-                              {item.source}
-                            </div>
+                               <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[8px] font-black text-white/60 uppercase tracking-widest">
+                                 {item.source}
+                               </div>
+                               {/* Political Bias Indicator */}
+                               <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest"
+                                 style={{
+                                   backgroundColor: item.category === 'Left-wing' ? '#3b82f6' :
+                                                   item.category === 'Right-wing' ? '#ef4444' :
+                                                   item.category === 'Propaganda' ? '#7c3aed' :
+                                                   '#6b7280', // Centrist - gray
+                                   color: 'white'
+                                 }}>
+                                 {item.category === 'Left-wing' ? 'LEFT' :
+                                  item.category === 'Right-wing' ? 'RIGHT' :
+                                  item.category === 'Propaganda' ? 'PROP' :
+                                  'CENT'}
+                               </div>
+                             {/* Political Bias Indicator */}
+                             <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest"
+                               style={{
+                                 backgroundColor: item.category === 'Left-wing' ? '#3b82f6' :
+                                                 item.category === 'Right-wing' ? '#ef4444' :
+                                                 item.category === 'Propaganda' ? '#7c3aed' :
+                                                 '#6b7280', // Centrist - gray
+                                 color: 'white'
+                               }}>
+                               {item.category === 'Left-wing' ? 'LEFT' :
+                                item.category === 'Right-wing' ? 'RIGHT' :
+                                item.category === 'Propaganda' ? 'PROP' :
+                                'CENT'}
+                             </div>
                           </div>
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center justify-between">
@@ -7292,19 +6640,33 @@ const newMessage = {
                       ))
                     ) : (
                       worldNews.length > 0 ? (
-                        worldNews.slice((worldPage - 1) * newsPerPage, worldPage * newsPerPage).map(item => (
+                        sortNews(worldNews).slice((worldPage - 1) * newsPerPage, worldPage * newsPerPage).map(item => (
                         <GlassCard 
                           key={item.id} 
                           className="hover:border-blue-500/30 transition-colors group cursor-pointer"
                           onClick={() => window.open(item.url, '_blank')}
                         >
-                          <div className="flex flex-col md:flex-row gap-6">
-                            <div className="w-full md:w-48 h-32 rounded-xl overflow-hidden bg-blue-900/20 flex items-center justify-center border border-white/5 relative">
-                              <Newspaper className="w-12 h-12 text-blue-500/40 group-hover:scale-110 transition-transform" />
-                              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[8px] font-black text-white/60 uppercase tracking-widest">
-                                {item.source}
-                              </div>
-                            </div>
+                           <div className="flex flex-col md:flex-row gap-6">
+                             <div className="w-full md:w-48 h-32 rounded-xl overflow-hidden bg-blue-900/20 flex items-center justify-center border border-white/5 relative">
+                               <Newspaper className="w-12 h-12 text-blue-500/40 group-hover:scale-110 transition-transform" />
+                               <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[8px] font-black text-white/60 uppercase tracking-widest">
+                                 {item.source}
+                               </div>
+                               {/* Political Bias Indicator */}
+                               <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest"
+                                 style={{
+                                   backgroundColor: item.category === 'Left-wing' ? '#3b82f6' :
+                                                   item.category === 'Right-wing' ? '#ef4444' :
+                                                   item.category === 'Propaganda' ? '#7c3aed' :
+                                                   '#6b7280', // Centrist - gray
+                                   color: 'white'
+                                 }}>
+                                 {item.category === 'Left-wing' ? 'LEFT' :
+                                  item.category === 'Right-wing' ? 'RIGHT' :
+                                  item.category === 'Propaganda' ? 'PROP' :
+                                  'CENT'}
+                               </div>
+                             </div>
                             <div className="flex-1 space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{item.date}</span>
@@ -8198,10 +7560,6 @@ const newMessage = {
                 </motion.div>
               )}
 
-              {activeTab === 'music' && (
-                <MusicPlayerComponent t={t} />
-              )}
-
               {activeTab === 'clock' && (
                 <motion.div
                   key="clock"
@@ -8592,19 +7950,15 @@ const newMessage = {
               </div>
               <div className="w-full md:w-80 p-6 space-y-6 bg-black/40">
                 <div className="space-y-1">
-                  <h3 className="text-3xl font-black italic text-red-500">{selectedPhoto.registration}</h3>
+                  <h3 className="text-3xl font-black italic text-red-500">{selectedPhoto.registration}{selectedPhoto.specialLivery ? ' ' + selectedPhoto.specialLivery : ''}</h3>
                   <p className="text-lg font-bold">{selectedPhoto.airline}</p>
                   <p className="text-xs text-white/40 uppercase tracking-widest">{selectedPhoto.aircraftType}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="p-3 aero-glass space-y-1">
                     <span className="text-[10px] text-white/40 uppercase font-bold">Date</span>
                     <p className="text-xs font-bold">{selectedPhoto.date}</p>
-                  </div>
-                  <div className="p-3 aero-glass space-y-1">
-                    <span className="text-[10px] text-white/40 uppercase font-bold">Location</span>
-                    <p className="text-xs font-bold">LHR / EGLL</p>
                   </div>
                 </div>
 
