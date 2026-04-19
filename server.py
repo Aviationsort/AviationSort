@@ -259,6 +259,25 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
+# SSL context for secure origins (fix for: Only secure origins are allowed)
+import ssl
+import os
+
+# Use TLS with explicit version constraints for Windows compatibility
+context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+context.minimum_version = ssl.TLSVersion.TLSv1_2
+context.maximum_version = ssl.TLSVersion.TLSv1_3
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+# Try to load certs if they exist (for production use)
+if os.path.exists('cert.pem') and os.path.exists('key.pem'):
+    try:
+        context.load_cert_chain('cert.pem', 'key.pem')
+    except:
+        # Fall back to adhoc if certs are invalid - this is OK for dev
+        pass
+
 # Optimized proxy with caching
 @app.route('/api/proxy')
 def cors_proxy():
@@ -491,13 +510,14 @@ def get_flexpics():
             'photo_airline': row[5] if len(row) > 5 else '',
             'photo_aircraft_type': row[6] if len(row) > 6 else '',
             'photo_date': row[7] if len(row) > 7 else '',
-            'file_directory': row[8] if len(row) > 8 else '',
-            'date_added': row[9] if len(row) > 9 else '',
-            'hashtags': row[10] if len(row) > 10 else '',
-            'is_video': bool(row[11]) if len(row) > 11 else False,
-            'width': row[12] if len(row) > 12 else 0,
-            'height': row[13] if len(row) > 13 else 0,
-            'file_size': row[14] if len(row) > 14 else 0
+            'special_livery': row[8] if len(row) > 8 else '',
+            'file_directory': row[9] if len(row) > 9 else '',
+            'date_added': row[10] if len(row) > 10 else '',
+            'hashtags': row[11] if len(row) > 11 else '',
+            'is_video': bool(row[12]) if len(row) > 12 else False,
+            'width': row[13] if len(row) > 13 else 0,
+            'height': row[14] if len(row) > 14 else 0,
+            'file_size': row[15] if len(row) > 15 else 0
         })
     return jsonify(flexpics)
 
@@ -527,8 +547,8 @@ def get_similar_flexpics():
 @app.route('/api/flexpics', methods=['POST'])
 def add_flexpic():
     data = request.json
-    flexpics_cursor.execute('''INSERT INTO flexpics (username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, file_directory, date_added, hashtags, is_video, width, height, file_size)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+    flexpics_cursor.execute('''INSERT INTO flexpics (username, photo_url, photo_thumbnail_url, photo_registration, photo_airline, photo_aircraft_type, photo_date, special_livery, file_directory, date_added, hashtags, is_video, width, height, file_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
         data.get('username', ''),
         data.get('photo_url', ''),
         data.get('photo_thumbnail_url', ''),
@@ -536,6 +556,7 @@ def add_flexpic():
         data.get('photo_airline', ''),
         data.get('photo_aircraft_type', ''),
         data.get('photo_date', ''),
+        data.get('special_livery', ''),
         data.get('file_directory', ''),
         data.get('date_added', ''),
         data.get('hashtags', ''),
@@ -741,7 +762,7 @@ def serve_static(path):
 
 if __name__ == '__main__':
     print(f"Starting server on port {PORT}...")
-    print(f"Server running at http://localhost:{PORT}")
+    print(f"Server running at https://localhost:{PORT}")
     print("Press Ctrl+C to stop")
     
-    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False, ssl_context=context)

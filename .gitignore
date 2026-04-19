@@ -51,3 +51,8 @@ Thumbs.db
 *.7z
 *.rar
 ```
+.extension/
+
+# SSL certificates (development only)
+cert.pem
+key.pem

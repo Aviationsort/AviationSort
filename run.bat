@@ -5,6 +5,8 @@ echo ========================================
 echo.
 echo [1/4] Installing Node.js dependencies...
 call npm install
+call npm fund
+call npm audit
 echo.
 echo [2/4] Installing Python dependencies...
 pip install flask flask-cors cloudscraper
@@ -22,7 +24,7 @@ if %ERRORLEVEL% == 0 (
     goto :end
 )
 
-echo Starting Python server on http://localhost:5001...
+echo Starting Python server on https://localhost:5001...
 start "Python Server" cmd /c "python server.py"
 timeout /t 3 /nobreak > nul
 
@@ -33,7 +35,7 @@ echo.
 echo ========================================
 echo All servers started!
 echo - Vite:      http://localhost:5173
-echo - Python:    http://localhost:5001
+echo - Python:    https://localhost:5001
 echo ========================================
 echo.
 pause
