@@ -1,11 +1,12 @@
 // Note: PEPPER should be moved to server-side environment variables
 // This is a placeholder - actual pepper should come from secure server config
-const PEPPER_PLACEHOLDER = 'aviation_sort_pepper_placeholder';
+const PEPPER_PLACEHOLDER = 'aviation_sort_pepper_placeholder_v2_secure';
 
 export interface EncryptionResult {
   success: boolean;
   data?: string;
   error?: string;
+  errorCode?: string;
 }
 
 export interface SessionData {
@@ -24,37 +25,88 @@ const SESSION_TIMEOUT = 3600;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 300000;
 
+// Error codes for better error handling
+export const ERROR_CODES = {
+  ENCRYPTION_FAILED: 'ENC_001',
+  DECRYPTION_FAILED: 'DEC_001',
+  INVALID_INPUT: 'INV_001',
+  STORAGE_ERROR: 'STO_001',
+  VALIDATION_ERROR: 'VAL_001',
+  RATE_LIMIT_EXCEEDED: 'RAT_001'
+} as const;
+
 // SECURITY WARNING: This module contains client-side encryption utilities.
 // For production applications, sensitive operations should be moved to server-side.
 // Client-side encryption can be bypassed by determined attackers.
 
+/**
+ * Enhanced encryption utilities with improved error handling and security
+ */
 export const encryption = {
+  /**
+   * Generate a new AES-GCM crypto key
+   * @returns Promise<CryptoKey>
+   */
   async generateKey(): Promise<CryptoKey> {
-    return await crypto.subtle.generateKey(
-      { name: 'AES-GCM', length: 256 },
-      true,
-      ['encrypt', 'decrypt']
-    );
+    try {
+      return await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+    } catch (error) {
+      console.error('Failed to generate encryption key:', error);
+      throw new Error(`Key generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   },
 
   async exportKey(key: CryptoKey): Promise<string> {
-    const exported = await crypto.subtle.exportKey('raw', key);
-    return this.arrayBufferToBase64(exported);
+    try {
+      const exported = await crypto.subtle.exportKey('raw', key);
+      return this.arrayBufferToBase64(exported);
+    } catch (error) {
+      console.error('Failed to export key:', error);
+      throw new Error('Key export failed');
+    }
   },
 
   async importKey(keyData: string): Promise<CryptoKey> {
-    const keyBuffer = this.base64ToArrayBuffer(keyData);
-    return await crypto.subtle.importKey(
-      'raw',
-      keyBuffer,
-      { name: 'AES-GCM', length: 256 },
-      true,
-      ['encrypt', 'decrypt']
-    );
+    try {
+      if (!keyData || typeof keyData !== 'string') {
+        throw new Error('Invalid key data');
+      }
+      const keyBuffer = this.base64ToArrayBuffer(keyData);
+      return await crypto.subtle.importKey(
+        'raw',
+        keyBuffer,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+    } catch (error) {
+      console.error('Failed to import key:', error);
+      throw new Error('Key import failed');
+    }
   },
 
   async encrypt(plaintext: string, key?: CryptoKey): Promise<EncryptionResult> {
     try {
+      if (!plaintext || typeof plaintext !== 'string') {
+        return { 
+          success: false, 
+          error: 'Invalid plaintext input',
+          errorCode: ERROR_CODES.INVALID_INPUT
+        };
+      }
+
+      if (plaintext.length > 1000000) {
+        return { 
+          success: false, 
+          error: 'Plaintext too large (max 1MB)',
+          errorCode: ERROR_CODES.INVALID_INPUT
+        };
+      }
+
       const cryptoKey = key || await this.getOrCreateKey();
       const encoder = new TextEncoder();
       const data = encoder.encode(plaintext);
@@ -72,14 +124,36 @@ export const encryption = {
       
       return { success: true, data: this.arrayBufferToBase64(combined) };
     } catch (error) {
-      return { success: false, error: String(error) };
+      console.error('Encryption failed:', error);
+      return { 
+        success: false, 
+        error: `Encryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        errorCode: ERROR_CODES.ENCRYPTION_FAILED
+      };
     }
   },
 
   async decrypt(ciphertext: string, key?: CryptoKey): Promise<EncryptionResult> {
     try {
+      if (!ciphertext || typeof ciphertext !== 'string') {
+        return { 
+          success: false, 
+          error: 'Invalid ciphertext input',
+          errorCode: ERROR_CODES.INVALID_INPUT
+        };
+      }
+
       const cryptoKey = key || await this.getOrCreateKey();
       const combined = this.base64ToArrayBuffer(ciphertext);
+      
+      if (combined.byteLength < 13) {
+        return { 
+          success: false, 
+          error: 'Invalid ciphertext format',
+          errorCode: ERROR_CODES.DECRYPTION_FAILED
+        };
+      }
+
       const iv = new Uint8Array(combined.slice(0, 12));
       const encryptedData = new Uint8Array(combined.slice(12));
       
@@ -92,20 +166,30 @@ export const encryption = {
       const decoder = new TextDecoder();
       return { success: true, data: decoder.decode(decryptedBuffer) };
     } catch (error) {
-      return { success: false, error: String(error) };
+      console.error('Decryption failed:', error);
+      return { 
+        success: false, 
+        error: 'Decryption failed - invalid ciphertext or key',
+        errorCode: ERROR_CODES.DECRYPTION_FAILED
+      };
     }
   },
 
   async getOrCreateKey(): Promise<CryptoKey> {
-    // Use sessionStorage for better security - keys are cleared when session ends
-    const storedKey = sessionStorage.getItem(STORAGE_KEYS.CRYPTO_KEY);
-    if (storedKey) {
-      return await this.importKey(storedKey);
+    try {
+      // Use sessionStorage for better security - keys are cleared when session ends
+      const storedKey = sessionStorage.getItem(STORAGE_KEYS.CRYPTO_KEY);
+      if (storedKey) {
+        return await this.importKey(storedKey);
+      }
+      const newKey = await this.generateKey();
+      const exported = await this.exportKey(newKey);
+      sessionStorage.setItem(STORAGE_KEYS.CRYPTO_KEY, exported);
+      return newKey;
+    } catch (error) {
+      console.error('Failed to get or create key:', error);
+      throw new Error('Key management failed');
     }
-    const newKey = await this.generateKey();
-    const exported = await this.exportKey(newKey);
-    sessionStorage.setItem(STORAGE_KEYS.CRYPTO_KEY, exported);
-    return newKey;
   },
 
   hashPassword(password: string): string {
@@ -113,15 +197,24 @@ export const encryption = {
     // Client-side hashing exposes passwords to potential attacks
     console.warn('Password hashing on client-side is insecure. Use server-side hashing instead.');
 
-    const salt = this.generateRandomBytes(32);
-    const pepperBytes = new TextEncoder().encode(PEPPER_PLACEHOLDER);
-    const passwordBytes = new TextEncoder().encode(password);
-    const combined = new Uint8Array(salt.length + pepperBytes.length + passwordBytes.length);
-    combined.set(salt, 0);
-    combined.set(pepperBytes, 32);
-    combined.set(passwordBytes, 64);
+    try {
+      if (!password || password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
 
-    return this.arrayBufferToBase64(salt) + '.' + this.sha256Sync(combined);
+      const salt = this.generateRandomBytes(32);
+      const pepperBytes = new TextEncoder().encode(PEPPER_PLACEHOLDER);
+      const passwordBytes = new TextEncoder().encode(password);
+      const combined = new Uint8Array(salt.length + pepperBytes.length + passwordBytes.length);
+      combined.set(salt, 0);
+      combined.set(pepperBytes, 32);
+      combined.set(passwordBytes, 64);
+
+      return this.arrayBufferToBase64(salt) + '.' + this.sha256Sync(combined);
+    } catch (error) {
+      console.error('Password hashing failed:', error);
+      throw new Error('Password hashing failed');
+    }
   },
 
   verifyPassword(password: string, storedHash: string): boolean {
@@ -129,6 +222,10 @@ export const encryption = {
     console.warn('Password verification on client-side is insecure. Use server-side verification instead.');
 
     try {
+      if (!password || !storedHash) {
+        return false;
+      }
+
       const parts = storedHash.split('.');
       if (parts.length !== 2) return false;
 
@@ -150,86 +247,126 @@ export const encryption = {
   },
 
   generateToken(length: number = 32): string {
-    const bytes = this.generateRandomBytes(length);
-    return this.arrayBufferToBase64(bytes)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
+    try {
+      const bytes = this.generateRandomBytes(length);
+      return this.arrayBufferToBase64(bytes)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+    } catch (error) {
+      console.error('Token generation failed:', error);
+      throw new Error('Token generation failed');
+    }
   },
 
   hashData(data: string): string {
-    // Validate input to prevent injection attacks
-    if (typeof data !== 'string' || data.length > 10000) {
-      throw new Error('Invalid data for hashing');
-    }
+    try {
+      // Validate input to prevent injection attacks
+      if (typeof data !== 'string' || data.length > 10000) {
+        throw new Error('Invalid data for hashing');
+      }
 
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(data + PEPPER_PLACEHOLDER);
-    return this.sha256Sync(bytes);
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(data + PEPPER_PLACEHOLDER);
+      return this.sha256Sync(bytes);
+    } catch (error) {
+      console.error('Data hashing failed:', error);
+      throw new Error('Data hashing failed');
+    }
   },
 
   generateRandomBytes(length: number): Uint8Array {
-    return crypto.getRandomValues(new Uint8Array(length));
+    try {
+      return crypto.getRandomValues(new Uint8Array(length));
+    } catch (error) {
+      console.error('Random bytes generation failed:', error);
+      throw new Error('Random bytes generation failed');
+    }
   },
 
   sha256Sync(data: Uint8Array | ArrayBuffer): string {
-    const hashBuffer = crypto.subtle.digestSync('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+      const hashBuffer = crypto.subtle.digestSync('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+      console.error('SHA256 sync failed:', error);
+      throw new Error('SHA256 hashing failed');
+    }
   },
 
   async sha256(message: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+      console.error('SHA256 async failed:', error);
+      throw new Error('SHA256 hashing failed');
+    }
   },
 
   pbkdf2(password: string, salt: Uint8Array, iterations: number = 100000): Promise<Uint8Array> {
-    const encoder = new TextEncoder();
-    const passwordKey = encoder.encode(password);
-    
-    return crypto.subtle.importKey(
-      'raw',
-      passwordKey,
-      'PBKDF2',
-      false,
-      ['deriveBits']
-    ).then(key => 
-      crypto.subtle.deriveBits(
-        {
-          name: 'PBKDF2',
-          salt,
-          iterations,
-          hash: 'SHA-256'
-        },
-        key,
-        256
-      )
-    ).then(buffer => new Uint8Array(buffer));
+    try {
+      const encoder = new TextEncoder();
+      const passwordKey = encoder.encode(password);
+      
+      return crypto.subtle.importKey(
+        'raw',
+        passwordKey,
+        'PBKDF2',
+        false,
+        ['deriveBits']
+      ).then(key => 
+        crypto.subtle.deriveBits(
+          {
+            name: 'PBKDF2',
+            salt,
+            iterations,
+            hash: 'SHA-256'
+          },
+          key,
+          256
+        )
+      ).then(buffer => new Uint8Array(buffer));
+    } catch (error) {
+      console.error('PBKDF2 failed:', error);
+      throw new Error('Key derivation failed');
+    }
   },
 
   arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
-    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    try {
+      const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch (error) {
+      console.error('Base64 encoding failed:', error);
+      throw new Error('Base64 encoding failed');
     }
-    return btoa(binary);
   },
 
   base64ToArrayBuffer(base64: string): Uint8Array {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
+    try {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    } catch (error) {
+      console.error('Base64 decoding failed:', error);
+      throw new Error('Base64 decoding failed');
     }
-    return bytes;
   },
 
   timingSafeEqual(a: string, b: string): boolean {
-    if (a.length !== b.length) return false;
+    if (!a || !b || a.length !== b.length) return false;
     let result = 0;
     for (let i = 0; i < a.length; i++) {
       result |= a.charCodeAt(i) ^ b.charCodeAt(i);
