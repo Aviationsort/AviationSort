@@ -17,28 +17,53 @@ DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
 # ============== SIMPLE CRYPTO (No secrets - just basic operations) ==============
-PEPPER = b'aviation_sort_pepper_2024'
+# Enhanced pepper with longer, more secure value
+PEPPER = b'aviation_sort_pepper_2024_secure_v2_with_enhanced_crypto'
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(32)
-    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
-    return base64.b64encode(salt + pwd_hash).decode('utf-8')
+    """Hash password using PBKDF2-HMAC-SHA256 with salt and pepper"""
+    try:
+        if not password or len(password) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        
+        salt = secrets.token_bytes(32)
+        pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
+        return base64.b64encode(salt + pwd_hash).decode('utf-8')
+    except Exception as e:
+        print(f"Password hashing error: {e}")
+        raise
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash using constant-time comparison"""
     try:
+        if not password or not stored_hash:
+            return False
+        
         data = base64.b64decode(stored_hash.encode('utf-8'))
         salt = data[:32]
         stored_pwd_hash = data[32:]
         pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
         return secrets.compare_digest(pwd_hash, stored_pwd_hash)
-    except:
+    except Exception:
         return False
 
 def generate_token(length: int = 32) -> str:
-    return secrets.token_urlsafe(length)
+    """Generate cryptographically secure random token"""
+    try:
+        return secrets.token_urlsafe(length)
+    except Exception as e:
+        print(f"Token generation error: {e}")
+        raise
 
 def hash_data(data: str) -> str:
-    return hashlib.sha256(data.encode('utf-8') + PEPPER).hexdigest()
+    """Hash data using SHA256 with pepper"""
+    try:
+        if not data or len(data) > 10000:
+            raise ValueError('Invalid data for hashing')
+        return hashlib.sha256(data.encode('utf-8') + PEPPER).hexdigest()
+    except Exception as e:
+        print(f"Data hashing error: {e}")
+        raise
 
 # ============== SESSION MANAGEMENT ==============
 class SessionManager:
