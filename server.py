@@ -8,7 +8,6 @@ import hashlib
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-import secrets as sec
 
 print("AviationSort server starting...")
 
@@ -31,7 +30,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
         salt = data[:32]
         stored_pwd_hash = data[32:]
         pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt + PEPPER, 100000)
-        return sec.compare_digest(pwd_hash, stored_pwd_hash)
+        return secrets.compare_digest(pwd_hash, stored_pwd_hash)
     except:
         return False
 
