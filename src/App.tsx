@@ -230,6 +230,23 @@ interface WeatherData {
   description: string;
 }
 
+interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  fileUrl: string;
+  duration: number;
+  coverArt?: string;
+  isVideo: boolean;
+}
+
+interface Playlist {
+  id: string;
+  name: string;
+  tracks: MusicTrack[];
+  createdAt: Date;
+}
+
 interface ProfileData {
   displayName: string;
   bio: string;
@@ -5067,6 +5084,18 @@ export default function App() {
   });
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
 
+  // Music Player State
+  const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(0.7);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(null);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   const [notifications, setNotifications] = useState<string[]>([]);
 
   // Authentication State
@@ -5264,6 +5293,231 @@ export default function App() {
     });
     setPhotos(prev => prev.map(p => ({ ...p, isFavorite: false })));
   };
+
+  // Music Player Functions
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      Array.from(files).forEach(file => {
+        if (file.type.startsWith('audio/') || file.type.startsWith('video/')) {
+          const url = URL.createObjectURL(file);
+          const newTrack: MusicTrack = {
+            id: Date.now().toString() + Math.random().toString(),
+            title: file.name.replace(/\.[^/.]+$/, ''),
+            artist: 'Unknown Artist',
+            fileUrl: url,
+            duration: 0,
+            isVideo: file.type.startsWith('video/')
+          };
+
+          // Try to get duration
+          const audio = document.createElement('audio');
+          audio.src = url;
+          audio.addEventListener('loadedmetadata', () => {
+            newTrack.duration = audio.duration;
+          });
+
+          // Add to default playlist or create one
+          setPlaylists(prev => {
+            const defaultPlaylist = prev.find(p => p.name === 'My Music');
+            if (defaultPlaylist) {
+              return prev.map(p => 
+                p.name === 'My Music' 
+                  ? { ...p, tracks: [...p.tracks, newTrack] }
+                  : p
+              );
+            } else {
+              return [...prev, {
+                id: 'default',
+                name: 'My Music',
+                tracks: [newTrack],
+                createdAt: new Date()
+              }];
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error uploading files:', error);
+    }
+  }, []);
+
+  const playTrack = useCallback((track: MusicTrack) => {
+    try {
+      if (currentTrack?.id === track.id && isPlaying) {
+        setIsPlaying(false);
+        return;
+      }
+
+      setCurrentTrack(track);
+      setIsPlaying(true);
+      setCurrentTime(0);
+
+      setTimeout(() => {
+        if (track.isVideo && videoRef.current) {
+          videoRef.current.play().catch(err => console.error('Video play error:', err));
+        } else if (audioRef.current) {
+          audioRef.current.play().catch(err => console.error('Audio play error:', err));
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error playing track:', error);
+    }
+  }, [currentTrack, isPlaying]);
+
+  const togglePlayPause = useCallback(() => {
+    try {
+      if (isPlaying) {
+        if (currentTrack?.isVideo && videoRef.current) {
+          videoRef.current.pause();
+        } else if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsPlaying(false);
+      } else {
+        if (currentTrack?.isVideo && videoRef.current) {
+          videoRef.current.play().catch(err => console.error('Video play error:', err));
+        } else if (audioRef.current) {
+          audioRef.current.play().catch(err => console.error('Audio play error:', err));
+        }
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+    }
+  }, [isPlaying, currentTrack]);
+
+  const handleTimeUpdate = useCallback(() => {
+    if (currentTrack?.isVideo && videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    } else if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  }, [currentTrack]);
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const time = parseFloat(e.target.value);
+      setCurrentTime(time);
+      if (currentTrack?.isVideo && videoRef.current) {
+        videoRef.current.currentTime = time;
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = time;
+      }
+    } catch (error) {
+      console.error('Error seeking:', error);
+    }
+  }, [currentTrack]);
+
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const vol = parseFloat(e.target.value);
+      setVolume(vol);
+      if (audioRef.current) audioRef.current.volume = vol;
+      if (videoRef.current) videoRef.current.volume = vol;
+    } catch (error) {
+      console.error('Error changing volume:', error);
+    }
+  }, []);
+
+  const playNextTrack = useCallback(() => {
+    try {
+      if (!currentPlaylistId) return;
+      const playlist = playlists.find(p => p.id === currentPlaylistId);
+      if (!playlist || !currentTrack) return;
+
+      const currentIndex = playlist.tracks.findIndex(t => t.id === currentTrack.id);
+      let nextIndex: number;
+
+      if (isShuffle) {
+        nextIndex = Math.floor(Math.random() * playlist.tracks.length);
+      } else {
+        nextIndex = (currentIndex + 1) % playlist.tracks.length;
+      }
+
+      playTrack(playlist.tracks[nextIndex]);
+    } catch (error) {
+      console.error('Error playing next track:', error);
+    }
+  }, [currentPlaylistId, playlists, currentTrack, isShuffle, playTrack]);
+
+  const playPreviousTrack = useCallback(() => {
+    try {
+      if (!currentPlaylistId) return;
+      const playlist = playlists.find(p => p.id === currentPlaylistId);
+      if (!playlist || !currentTrack) return;
+
+      const currentIndex = playlist.tracks.findIndex(t => t.id === currentTrack.id);
+      const previousIndex = currentIndex <= 0 ? playlist.tracks.length - 1 : currentIndex - 1;
+
+      playTrack(playlist.tracks[previousIndex]);
+    } catch (error) {
+      console.error('Error playing previous track:', error);
+    }
+  }, [currentPlaylistId, playlists, currentTrack, playTrack]);
+
+  const handleTrackEnded = useCallback(() => {
+    try {
+      if (repeatMode === 'one') {
+        if (currentTrack?.isVideo && videoRef.current) {
+          videoRef.current.currentTime = 0;
+          videoRef.current.play().catch(err => console.error('Video replay error:', err));
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(err => console.error('Audio replay error:', err));
+        }
+      } else if (repeatMode === 'all' || currentPlaylistId) {
+        playNextTrack();
+      } else {
+        setIsPlaying(false);
+      }
+    } catch (error) {
+      console.error('Error handling track end:', error);
+    }
+  }, [repeatMode, currentTrack, currentPlaylistId, playNextTrack]);
+
+  const createPlaylist = useCallback((name: string) => {
+    try {
+      const newPlaylist: Playlist = {
+        id: Date.now().toString(),
+        name,
+        tracks: [],
+        createdAt: new Date()
+      };
+      setPlaylists(prev => [...prev, newPlaylist]);
+    } catch (error) {
+      console.error('Error creating playlist:', error);
+    }
+  }, []);
+
+  const addToPlaylist = useCallback((trackId: string, playlistId: string) => {
+    try {
+      setPlaylists(prev => prev.map(p => {
+        if (p.id === playlistId) {
+          const track = playlists.flatMap(pl => pl.tracks).find(t => t.id === trackId);
+          if (track && !p.tracks.some(t => t.id === trackId)) {
+            return { ...p, tracks: [...p.tracks, track] };
+          }
+        }
+        return p;
+      }));
+    } catch (error) {
+      console.error('Error adding to playlist:', error);
+    }
+  }, [playlists]);
+
+  const deletePlaylist = useCallback((playlistId: string) => {
+    try {
+      setPlaylists(prev => prev.filter(p => p.id !== playlistId));
+      if (currentPlaylistId === playlistId) {
+        setCurrentPlaylistId(null);
+      }
+    } catch (error) {
+      console.error('Error deleting playlist:', error);
+    }
+  }, [currentPlaylistId]);
 
   // Check authentication on startup
   useEffect(() => {
