@@ -102,6 +102,79 @@ interface Photo {
   file_directory?: string;
 }
 
+interface ParsedPhotoMetadata {
+  registration: string;
+  airline: string;
+  aircraftType: string;
+  date: string;
+  specialLivery: string;
+  file_directory: string;
+  extension: string;
+  mediaName: string;
+}
+
+// Shared parser for both Album and FlexPics
+const parsePhotoMetadata = (file: File, relativePath: string): ParsedPhotoMetadata => {
+  const pathParts = relativePath.split('/');
+  const selectedFolder = pathParts[0];
+  let airline = 'Unknown';
+  let aircraftType = 'Unknown';
+
+  // Check if hierarchical structure
+  if (pathParts.length >= 4) { // folder/airline/aircraft/file.jpg
+    airline = pathParts[1];
+    aircraftType = pathParts[2];
+  }
+
+  const name = file.name.replace(/\.[^/.]+$/, "");
+  let registration = 'Unknown';
+  let specialLivery = '';
+  let date = 'Unknown';
+
+  // Parse registration and special livery
+  const regLiveryMatch = name.match(/^([A-Z0-9\-\.]+)(?:\s+(.+?))?(?=\s*\(|$)/);
+  if (regLiveryMatch) {
+    registration = regLiveryMatch[1];
+    specialLivery = regLiveryMatch[2] || '';
+  }
+
+  // Parse date
+  const dateMatch = name.match(/(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})/);
+  if (dateMatch) {
+    const month = parseInt(dateMatch[1]);
+    const day = parseInt(dateMatch[2]);
+    let year = parseInt(dateMatch[3]);
+    if (year < 100) year = 2000 + year;
+    date = `${month}.${day}.${year % 100}`;
+  }
+
+  // For flat structure, extract airline from filename
+  if (pathParts.length < 4) {
+    const airlineMatch = name.match(/\[(.*?)\]/);
+    if (airlineMatch) {
+      const airlineAircraft = airlineMatch[1];
+      const parts = airlineAircraft.split(/\s+/);
+      airline = parts[0] || 'Unknown';
+      aircraftType = parts.slice(1).join(' ') || 'Unknown';
+    }
+  }
+
+  const extension = file.name.split('.').pop() || '';
+  const mediaName = `${registration}${specialLivery ? ' ' + specialLivery : ''} (${date})`;
+  const file_directory = `${selectedFolder}/${airline}/${aircraftType}/${mediaName}.${extension}`;
+
+  return {
+    registration,
+    airline,
+    aircraftType,
+    date,
+    specialLivery,
+    file_directory,
+    extension,
+    mediaName
+  };
+};
+
 interface Story {
   id: string;
   username: string;
@@ -5552,65 +5625,21 @@ export default function App() {
         const file = chunk[i] as File;
         if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
           const relativePath = (file as any).webkitRelativePath;
-          const pathParts = relativePath.split('/');
-          const selectedFolder = pathParts[0];
-          let airline = 'Unknown';
-          let aircraftType = 'Unknown';
-
-          // Check if hierarchical structure
-          if (pathParts.length >= 4) { // folder/airline/aircraft/file.jpg
-            airline = pathParts[1];
-            aircraftType = pathParts[2];
-          }
-
-          const name = file.name.replace(/\.[^/.]+$/, "");
-          let registration = 'Unknown';
-          let specialLivery = '';
-          let date = 'Unknown';
-
-          // Parse registration and special livery
-          const regLiveryMatch = name.match(/^([A-Z0-9\-\.]+)(?:\s+(.+?))?(?=\s*\(|$)/);
-          if (regLiveryMatch) {
-            registration = regLiveryMatch[1];
-            specialLivery = regLiveryMatch[2] || '';
-          }
-
-          // Parse date
-          const dateMatch = name.match(/(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})/);
-          if (dateMatch) {
-            const month = parseInt(dateMatch[1]);
-            const day = parseInt(dateMatch[2]);
-            let year = parseInt(dateMatch[3]);
-            if (year < 100) year = 2000 + year;
-            date = `${month}.${day}.${year % 100}`;
-          }
-
-          // For flat structure, extract airline from filename
-          if (pathParts.length < 4) {
-            const airlineMatch = name.match(/\[(.*?)\]/);
-            if (airlineMatch) {
-              const airlineAircraft = airlineMatch[1];
-              const parts = airlineAircraft.split(/\s+/);
-              airline = parts[0] || 'Unknown';
-              aircraftType = parts.slice(1).join(' ') || 'Unknown';
-            }
-          }
-
-          const extension = file.name.split('.').pop();
-          const mediaName = `${registration}${specialLivery ? ' ' + specialLivery : ''} (${date})`;
-          const file_directory = `${selectedFolder}/${airline}/${aircraftType}/${mediaName}.${extension}`;
+          
+          // Use shared parser for Album and FlexPics
+          const metadata = parsePhotoMetadata(file, relativePath);
 
           batch.push({
             id: Math.random().toString(36).substr(2, 9),
             url: URL.createObjectURL(file as any),
-            registration,
-            airline,
-            aircraftType,
-            date,
+            registration: metadata.registration,
+            airline: metadata.airline,
+            aircraftType: metadata.aircraftType,
+            date: metadata.date,
             isFavorite: false,
             isVideo: file.type.startsWith('video/'),
-            specialLivery: specialLivery || undefined,
-            file_directory
+            specialLivery: metadata.specialLivery || undefined,
+            file_directory: metadata.file_directory
           });
         }
       }
